@@ -279,3 +279,8 @@ def test_websocket_rejects_bad_token(client):
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect(f"{API}/ws/user?token=bad") as ws:
             ws.receive_json()
+
+
+def test_test_page(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "PrintLocker" in r.text

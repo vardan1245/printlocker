@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 
 from .config import get_settings
@@ -70,6 +71,14 @@ def create_app() -> FastAPI:
     @app.exception_handler(ServiceError)
     async def _service_error(_: Request, exc: ServiceError):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
+    page = Path(__file__).with_name("static") / "index.html"
+
+    @app.get("/", include_in_schema=False)
+    def test_page():
+        """Simple test page for trying the whole flow in a browser."""
+        html = page.read_text(encoding="utf-8").replace("__SIM_URL__", get_settings().simulator_url)
+        return HTMLResponse(html)
 
     @app.get("/health", tags=["meta"])
     def health():

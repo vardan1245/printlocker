@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     admin_password: str = ""
 
     cors_origins: str = "*"
+    simulator_url: str = ""  # link shown on the test page
 
 
 def fernet_key(secret: str) -> str:

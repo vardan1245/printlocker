@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PrintLocker test page</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --quiet:#6b6a65; --line:#dcdad3; --accent:#2f6fd6; --good:#2e8b57; --warn:#c98a12; --bad:#c0392b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:14px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; }
+  main { max-width:760px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h2 { font-size:15px; margin:0 0 4px; display:flex; gap:8px; align-items:center; }
+  .num { width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; display:inline-flex; align-items:center; justify-content:center; }
+  .hint { color:var(--quiet); font-size:13px; margin:0 0 12px; }
+  label { display:block; font-size:13px; color:var(--quiet); margin:8px 0 4px; }
+  input, select { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px; width:100%; background:#fff; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  button { font:inherit; border:0; background:var(--accent); color:#fff; padding:9px 16px; border-radius:8px; cursor:pointer; margin-top:12px; }
+  button.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:default; }
+  .msg { margin-top:10px; font-size:14px; }
+  .msg.err { color:var(--bad); } .msg.ok { color:var(--good); }
+  .kiosk { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-top:8px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .printer { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid #eee; font-size:14px; }
+  .printer:first-of-type { border-top:0; }
+  .job { border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:10px; }
+  .job-top { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .badge { font-size:12px; padding:2px 9px; border-radius:10px; background:#ecebe6; color:var(--quiet); white-space:nowrap; }
+  .badge.active { background:#e1ebfa; color:var(--accent); }
+  .badge.ready { background:#e3f3e9; color:var(--good); }
+  .badge.bad { background:#f7e1de; color:var(--bad); }
+  .steps { display:flex; gap:4px; margin:10px 0 4px; }
+  .steps div { flex:1; height:5px; border-radius:3px; background:#ecebe6; }
+  .steps div.on { background:var(--accent); }
+  .pickup { display:flex; gap:16px; align-items:center; margin-top:10px; padding:12px; background:#f3f8f5; border-radius:8px; flex-wrap:wrap; }
+  .pin { font:600 26px/1 ui-monospace,Menlo,monospace; letter-spacing:4px; }
+  .small { font-size:13px; color:var(--quiet); }
+  a { color:var(--accent); }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PrintLocker · test page</h1>
+  <span class="small" id="who">not logged in</span>
+</header>
+<main>
+  <section class="card" id="login-card">
+    <h2><span class="num">1</span>Log in</h2>
+    <p class="hint">The demo account is filled in already. Just press Log in.</p>
+    <div class="row">
+      <div><label>Email</label><input id="email" value="demo@example.com"></div>
+      <div><label>Password</label><input id="password" type="password" value="demo12345"></div>
+    </div>
+    <button id="login-btn">Log in</button>
+    <button class="ghost" id="register-btn">Create this account</button>
+    <div class="msg" id="login-msg"></div>
+  </section>
+
+  <section class="card hidden" id="kiosk-card">
+    <h2><span class="num">2</span>Choose a printer</h2>
+    <p class="hint">A kiosk is <b>online</b> only while its simulator page is open somewhere.
+      <span id="sim-link"></span></p>
+    <div id="kiosks"></div>
+  </section>
+
+  <section class="card hidden" id="upload-card">
+    <h2><span class="num">3</span>Print a document</h2>
+    <p class="hint">Upload your own PDF, or press <b>Use a sample PDF</b> to generate one.</p>
+    <label>Printer</label><select id="printer"></select>
+    <label>PDF file</label><input type="file" id="file" accept="application/pdf">
+    <div class="row3">
+      <div><label>Sample pages</label><input id="sample-pages" type="number" value="5" min="1" max="2000"></div>
+      <div><label>Copies</label><input id="copies" type="number" value="1" min="1" max="50"></div>
+      <div><label>Page range (optional)</label><input id="range" placeholder="e.g. 1-3,5"></div>
+    </div>
+    <label><input type="checkbox" id="duplex" style="width:auto"> Two-sided (duplex)</label>
+    <button id="print-btn">Print my file</button>
+    <button class="ghost" id="sample-btn">Use a sample PDF</button>
+    <div class="msg" id="print-msg"></div>
+  </section>
+
+  <section class="card hidden" id="jobs-card">
+    <h2><span class="num">4</span>Your print jobs</h2>
+    <p class="hint">Updates live. When a job is <b>ready</b>, its QR code and PIN appear. At the real kiosk you would scan the QR or type the PIN.</p>
+    <div id="jobs"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+const API = location.origin + '/api/v1';
+const SIM_URL = '__SIM_URL__';
+const $ = (s) => document.querySelector(s);
+let token = null, me = null, socket = null, pollTimer = null;
+const pickups = {};  // job id -> codes
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function msg(el, text, kind) { el.textContent = text; el.className = 'msg ' + (kind || ''); }
+
+async function api(path, opts = {}) {
+  const headers = opts.headers || {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (opts.json) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+  const r = await fetch(API + path, { ...opts, headers });
+  const data = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (!r.ok) {
+    let d = data?.detail;
+    if (Array.isArray(d)) d = d.map(x => x.msg).join('; ');
+    throw new Error(d || ('HTTP ' + r.status));
+  }
+  return data;
+}
+
+// ---------------- login
+$('#login-btn').onclick = async () => {
+  const m = $('#login-msg');
+  msg(m, 'Logging in… (if the server was asleep this can take up to a minute)');
+  try {
+    const t = await api('/auth/login', { method: 'POST', json: { email: $('#email').value, password: $('#password').value } });
+    token = t.access_token;
+    me = await api('/auth/me');
+    msg(m, 'Logged in.', 'ok');
+    $('#who').textContent = me.email;
+    ['#kiosk-card', '#upload-card', '#jobs-card'].forEach(s => $(s).classList.remove('hidden'));
+    loadKiosks(); loadJobs(); connectLive();
+  } catch (e) { msg(m, e.message, 'err'); }
+};
+$('#register-btn').onclick = async () => {
+  const m = $('#login-msg');
+  try {
+    await api('/auth/register', { method: 'POST', json: { email: $('#email').value, password: $('#password').value } });
+    msg(m, 'Account created. Now press Log in.', 'ok');
+  } catch (e) { msg(m, e.message, 'err'); }
+};
+
+// ---------------- kiosks
+async function loadKiosks() {
+  const ks = await api('/kiosks');
+  if (SIM_URL && !SIM_URL.startsWith('__')) $('#sim-link').innerHTML = `Open the <a href="${SIM_URL}" target="_blank">kiosk simulator</a> in another tab.`;
+  $('#kiosks').innerHTML = ks.map(k => `
+    <div class="kiosk">
+      <div><span class="dot" style="background:${k.status === 'online' ? 'var(--good)' : 'var(--bad)'}"></span>
+        <b>${esc(k.name)}</b> <span class="small">· ${esc(k.location)} · ${k.status}</span></div>
+      ${k.printers.map(p => `<div class="printer"><span>${esc(p.name)} ${p.status !== 'ok' ? '<span class="badge bad">' + p.status + '</span>' : ''}</span>
+        <span class="small">${p.compartments_free} of ${p.compartments_total} compartments free</span></div>`).join('')}
+    </div>`).join('') || '<p class="small">No kiosks yet.</p>';
+  const sel = $('#printer'), prev = sel.value;
+  sel.innerHTML = ks.flatMap(k => k.printers.map(p =>
+    `<option value="${p.id}">${esc(k.name)} · ${esc(p.name)} (${p.compartments_free} free)</option>`)).join('');
+  if (prev) sel.value = prev;
+}
+
+// ---------------- sample PDF (built in the browser)
+function samplePdf(n) {
+  const objs = [];
+  objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objs[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  const kids = [];
+  for (let i = 0; i < n; i++) {
+    const pageId = 4 + i * 2, contId = pageId + 1;
+    kids.push(pageId + ' 0 R');
+    const text = `BT /F1 36 Tf 72 720 Td (PrintLocker sample) Tj 0 -60 Td (Page ${i + 1} of ${n}) Tj ET`;
+    objs[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contId} 0 R >>`;
+    objs[contId] = `<< /Length ${text.length} >>\nstream\n${text}\nendstream`;
+  }
+  objs[2] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${n} >>`;
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  for (let id = 1; id < objs.length; id++) { offsets[id] = out.length; out += `${id} 0 obj\n${objs[id]}\nendobj\n`; }
+  const xref = out.length;
+  out += `xref\n0 ${objs.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objs.length; id++) out += String(offsets[id]).padStart(10, '0') + ' 00000 n \n';
+  out += `trailer\n<< /Size ${objs.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new Blob([out], { type: 'application/pdf' });
+}
+
+async function submit(blob, name) {
+  const m = $('#print-msg');
+  const fd = new FormData();
+  fd.append('printer_id', $('#printer').value);
+  fd.append('copies', $('#copies').value || '1');
+  if ($('#range').value.trim()) fd.append('page_range', $('#range').value.trim());
+  fd.append('duplex', $('#duplex').checked ? 'true' : 'false');
+  fd.append('file', blob, name);
+  msg(m, 'Uploading…');
+  try {
+    const j = await api('/jobs', { method: 'POST', body: fd });
+    const slots = j.compartments.map(c => '#' + c.compartment_slot).join(', ');
+    msg(m, `Job ${j.id} accepted: ${j.sheets} sheet(s), compartment ${slots}. Watch the simulator.`, 'ok');
+    loadJobs(); loadKiosks();
+  } catch (e) { msg(m, e.message, 'err'); }
+}
+$('#print-btn').onclick = () => {
+  const f = $('#file').files[0];
+  if (!f) return msg($('#print-msg'), 'Choose a PDF first, or use the sample.', 'err');
+  submit(f, f.name);
+};
+$('#sample-btn').onclick = () => {
+  const n = Math.max(1, Math.min(2000, parseInt($('#sample-pages').value) || 5));
+  submit(samplePdf(n), `sample-${n}-pages.pdf`);
+};
+
+// ---------------- jobs
+const FLOW = ['queued', 'printing', 'delivering', 'ready', 'collected'];
+const LABEL = { queued: 'waiting for printer', printing: 'printing', delivering: 'moving to compartment',
+  ready: 'ready for pickup', collected: 'collected', failed: 'failed', expired: 'expired', cancelled: 'cancelled' };
+
+async function loadJobs() {
+  const jobs = await api('/jobs');
+  for (const j of jobs) if (j.status === 'ready' && !pickups[j.id]) {
+    try { pickups[j.id] = await api(`/jobs/${j.id}/pickup`); } catch (e) {}
+  }
+  $('#jobs').innerHTML = jobs.slice(0, 10).map(jobHtml).join('') || '<p class="small">No jobs yet.</p>';
+  jobs.slice(0, 10).forEach(j => { if (pickups[j.id] && j.status === 'ready') drawQr(j.id, pickups[j.id].qr); });
+  const active = jobs.some(j => ['queued', 'printing', 'delivering'].includes(j.status));
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(loadJobs, active ? 2000 : 10000);
+}
+
+function jobHtml(j) {
+  const step = FLOW.indexOf(j.status);
+  const cls = j.status === 'ready' || j.status === 'collected' ? 'ready'
+            : ['failed', 'expired', 'cancelled'].includes(j.status) ? 'bad' : 'active';
+  const slots = j.compartments.map(c => '#' + c.compartment_slot).join(', ');
+  const p = pickups[j.id];
+  return `<div class="job">
+    <div class="job-top"><div><b>Job ${j.id}</b> · ${esc(j.original_filename)}
+      <div class="small">${j.sheets} sheet(s) · ${j.copies} cop${j.copies > 1 ? 'ies' : 'y'}${j.duplex ? ' · two-sided' : ''} · compartment ${slots}</div></div>
+      <span class="badge ${cls}">${LABEL[j.status] || j.status}</span></div>
+    ${step >= 0 ? `<div class="steps">${FLOW.slice(0, 4).map((_, i) => `<div class="${i <= step ? 'on' : ''}"></div>`).join('')}</div>` : ''}
+    ${j.error ? `<div class="msg err">${esc(j.error)}</div>` : ''}
+    ${j.status === 'ready' && p ? `<div class="pickup"><div id="qr-${j.id}"></div>
+      <div><div class="small">PIN</div><div class="pin">${esc(p.pin)}</div>
+      <div class="small" style="margin-top:6px">Compartment ${p.compartments.map(c => '#' + c).join(', ')} · until ${new Date(p.expires_at + (p.expires_at.endsWith('Z') ? '' : 'Z')).toLocaleString()}</div></div></div>` : ''}
+    ${['queued'].includes(j.status) ? `<button class="ghost" onclick="cancelJob(${j.id})">Cancel</button>` : ''}
+  </div>`;
+}
+
+function drawQr(id, text) {
+  const el = document.getElementById('qr-' + id);
+  if (!el) return;
+  if (typeof qrcode !== 'function') { el.innerHTML = `<code class="small">${esc(text)}</code>`; return; }
+  const q = qrcode(0, 'M'); q.addData(text); q.make();
+  el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2 });
+}
+
+async function cancelJob(id) {
+  try { await api(`/jobs/${id}`, { method: 'DELETE' }); } catch (e) { alert(e.message); }
+  loadJobs(); loadKiosks();
+}
+
+// ---------------- live updates (WebSocket); polling above is the fallback
+function connectLive() {
+  try {
+    socket = new WebSocket(API.replace(/^http/, 'ws') + '/ws/user?token=' + encodeURIComponent(token));
+    socket.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.type === 'job') { loadJobs(); loadKiosks(); } };
+    socket.onclose = () => setTimeout(() => token && connectLive(), 5000);
+  } catch (e) {}
+}
+setInterval(() => token && loadKiosks().catch(() => {}), 15000);
+</script>
+</body>
+</html>
