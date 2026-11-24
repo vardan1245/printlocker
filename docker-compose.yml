@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: printlocker
+      POSTGRES_PASSWORD: printlocker
+      POSTGRES_DB: printlocker
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U printlocker"]
+      interval: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      PL_DATABASE_URL: postgresql+psycopg://printlocker:printlocker@db:5432/printlocker
+      PL_STORAGE_DIR: /data/pdfs
+    volumes:
+      - pdfs:/data/pdfs
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  pdfs:
