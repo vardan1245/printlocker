@@ -80,6 +80,10 @@ async function act(body) {
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 function render(st) {
+  if (st.connecting) {
+    $('#kiosk').innerHTML = '<div class="column">Connecting to the PrintLocker server&hellip; (a sleeping free server takes about a minute to wake up)</div>';
+    return;
+  }
   $('#kname').textContent = st.kiosk || '';
   const root = $('#kiosk');
   root.innerHTML = '';

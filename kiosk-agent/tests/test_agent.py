@@ -17,7 +17,7 @@ from agent.api import ApiClient, ApiError, OfflineError  # noqa: E402
 from agent.hardware import SimHardware  # noqa: E402
 from agent.layout import build_pdf, page_sequence, sheet_count, split_sequence  # noqa: E402
 from agent.printers import CupsPrinter, PrintError, SimPrinter  # noqa: E402
-from agent.simview import LogBuffer, SimState, serve  # noqa: E402
+from agent.simview import LogBuffer, SimHolder, SimState, serve  # noqa: E402
 from agent.worker import PrinterWorker, process_job  # noqa: E402
 
 
@@ -332,5 +332,18 @@ def test_simview_state_and_actions():
                                      data=json.dumps({"type": "take_paper", "compartment_id": 101}).encode())
         assert json.loads(urllib.request.urlopen(req).read())["ok"]
         assert hw.compartments[101]["paper_sheets"] == 0
+    finally:
+        server.shutdown()
+
+
+def test_simview_connecting_before_config():
+    holder = SimHolder()
+    server = serve(holder, 0)
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        assert json.loads(urllib.request.urlopen(base + "/state").read()) == {"connecting": True}
+        hw, printers = sim(printer_ids=(1,), slots=1)
+        holder.sim = SimState(hw, printers, {1: "A"}, LogBuffer(), "Demo")
+        assert json.loads(urllib.request.urlopen(base + "/state").read())["kiosk"] == "Demo"
     finally:
         server.shutdown()

@@ -10,7 +10,7 @@ from .api import ApiClient, ApiError, OfflineError
 from .config import AgentConfig
 from .hardware import Hardware, SerialHardware, SimHardware
 from .printers import CupsPrinter, PrinterDriver, SimPrinter
-from .simview import LogBuffer, SimState, serve
+from .simview import LogBuffer, SimHolder, SimState, serve
 from .worker import PrinterWorker
 
 log = logging.getLogger("agent")
@@ -54,6 +54,11 @@ def main() -> None:
     signal.signal(signal.SIGINT, lambda *_: stop.set())
 
     api = ApiClient(cfg.server_url, cfg.kiosk_key)
+    holder = SimHolder()
+    if cfg.hardware_mode == "sim" and cfg.sim_view_port:
+        serve(holder, cfg.sim_view_port)  # page is up at once; shows "connecting" until configured
+        log.info("simulator page: http://localhost:%d", cfg.sim_view_port)
+    log.info("connecting to %s", cfg.server_url)
     conf = fetch_config(api, stop)
     log.info("kiosk %s (%s): %d printer(s), %d compartment(s)", conf["kiosk_id"], conf["name"],
              len(conf["printers"]), len(conf["compartments"]))
@@ -73,8 +78,7 @@ def main() -> None:
     if isinstance(hw, SimHardware) and cfg.sim_view_port:
         sims = {pid: d for pid, d in printers.items() if isinstance(d, SimPrinter)}
         names = {p["id"]: p["name"] for p in conf["printers"]}
-        serve(SimState(hw, sims, names, logbuf, conf["name"]), cfg.sim_view_port)
-        log.info("simulator page: http://localhost:%d", cfg.sim_view_port)
+        holder.sim = SimState(hw, sims, names, logbuf, conf["name"])
 
     threading.Thread(target=heartbeat_loop, args=(api, list(printers.values()), hw, cfg.heartbeat_seconds, stop),
                      name="heartbeat", daemon=True).start()

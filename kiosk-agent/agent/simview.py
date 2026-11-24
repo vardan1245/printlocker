@@ -67,7 +67,16 @@ class SimState:
         return {"ok": True}
 
 
-def serve(sim: SimState, port: int) -> ThreadingHTTPServer:
+class SimHolder:
+    """The page is served before the agent has reached the server; `sim` is set once it has."""
+
+    def __init__(self, sim: SimState | None = None):
+        self.sim = sim
+
+
+def serve(sim: SimState | SimHolder, port: int) -> ThreadingHTTPServer:
+    holder = sim if isinstance(sim, SimHolder) else SimHolder(sim)
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):  # keep the console clean
             pass
@@ -84,16 +93,19 @@ def serve(sim: SimState, port: int) -> ThreadingHTTPServer:
             if self.path == "/":
                 self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
             elif self.path == "/state":
-                self._send(200, json.dumps(sim.state()).encode(), "application/json")
+                st = holder.sim.state() if holder.sim else {"connecting": True}
+                self._send(200, json.dumps(st).encode(), "application/json")
             else:
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
             if self.path != "/action":
                 return self._send(404, b"not found", "text/plain")
+            if holder.sim is None:
+                return self._send(503, b'{"ok": false, "error": "connecting"}', "application/json")
             try:
                 n = int(self.headers.get("Content-Length", "0"))
-                result = sim.action(json.loads(self.rfile.read(n) or b"{}"))
+                result = holder.sim.action(json.loads(self.rfile.read(n) or b"{}"))
             except (ValueError, KeyError) as exc:
                 result = {"ok": False, "error": str(exc)}
             self._send(200 if result.get("ok") else 400, json.dumps(result).encode(), "application/json")
