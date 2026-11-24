@@ -203,6 +203,7 @@ def test_cups_driver_commands():
     CupsPrinter(1, "printer_a", run=run, poll=0).print_pdf(make_pdf(1), sheets=1, duplex=True, title="t")
     lp = calls[0]
     assert lp[:3] == ["lp", "-d", "printer_a"] and "sides=two-sided-long-edge" in lp
+    assert "outputorder=reverse" in lp  # face-up rear output: page 1 must end on top
 
 
 def test_cups_driver_lp_error():

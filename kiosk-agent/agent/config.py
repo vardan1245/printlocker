@@ -22,6 +22,7 @@ class AgentConfig:
     poll_seconds: float = 2.0
     heartbeat_seconds: float = 15.0
     data_dir: str = "./agent-data"
+    cups_options: tuple[str, ...] = ("outputorder=reverse",)
 
     @classmethod
     def from_env(cls) -> AgentConfig:
@@ -41,4 +42,6 @@ class AgentConfig:
             poll_seconds=float(e.get("PL_POLL_SECONDS", "2")),
             heartbeat_seconds=float(e.get("PL_HEARTBEAT_SECONDS", "15")),
             data_dir=e.get("PL_DATA_DIR", "./agent-data"),
+            # space-separated lp -o options, e.g. "outputorder=reverse OutputBin=FaceUp"
+            cups_options=tuple(e.get("PL_CUPS_OPTIONS", "outputorder=reverse").split()),
         )

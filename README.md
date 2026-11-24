@@ -69,6 +69,10 @@ Runs on the Raspberry Pi. Settings are environment variables:
 | `PL_SIM_SPEED` | `1.0` | simulator timing; `0` = instant |
 | `PL_SIM_VIEW_PORT` | `8100` | simulator page; `0` = off |
 | `PL_POLL_SECONDS` / `PL_HEARTBEAT_SECONDS` | `2` / `15` | polling intervals |
+| `PL_CUPS_OPTIONS` | `outputorder=reverse` | extra `lp -o` options, space-separated (add the PPD's face-up/rear output-bin option) |
+
+**Printer:** Kyocera ECOSYS PA4500x with the PT-320 face-up rear tray position as the paper exit
+(see the master spec). Face-up output reverses the stack, hence `outputorder=reverse`.
 
 Without Docker: `cd kiosk-agent && pip install -r requirements.txt && PL_KIOSK_KEY=... python -m agent.main`
 

@@ -102,7 +102,7 @@ def main() -> None:
             printers[p["id"]] = SimPrinter(p["id"], p["cups_queue"], cfg.sim_speed,
                                            on_sheet=hw.add_sheet if isinstance(hw, SimHardware) else None)
         else:
-            printers[p["id"]] = CupsPrinter(p["id"], p["cups_queue"])
+            printers[p["id"]] = CupsPrinter(p["id"], p["cups_queue"], extra_options=list(cfg.cups_options))
 
     # Jobs that were mid-print when the agent last stopped can't be trusted: the server fails
     # them, and their printer columns stay blocked until an operator checks for loose paper.

@@ -92,18 +92,25 @@ class CupsPrinter(PrinterDriver):
 
     _REQ = re.compile(r"request id is (\S+)")
 
-    def __init__(self, printer_id: int, queue: str, run=subprocess.run, poll: float = 2.0):
+    def __init__(self, printer_id: int, queue: str, run=subprocess.run, poll: float = 2.0,
+                 extra_options: list[str] | None = None):
         super().__init__(printer_id, queue)
         self._run = run
         self.poll = poll
+        # Face-up rear output (Kyocera PT-320 position) stacks pages in reverse, so by default
+        # we print in reverse order and page 1 ends on top. Add e.g. the PPD's output-bin option.
+        self.extra_options = extra_options if extra_options is not None else ["outputorder=reverse"]
 
     def print_pdf(self, pdf: bytes, *, sheets: int, duplex: bool, title: str) -> None:
         sides = "two-sided-long-edge" if duplex else "one-sided"
         with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
             f.write(pdf)
             f.flush()
-            res = self._run(["lp", "-d", self.queue, "-t", title, "-o", f"sides={sides}",
-                             "-o", "media=A4", f.name], capture_output=True, text=True)
+            opts = [f"sides={sides}", "media=A4", *self.extra_options]
+            cmd = ["lp", "-d", self.queue, "-t", title]
+            for o in opts:
+                cmd += ["-o", o]
+            res = self._run(cmd + [f.name], capture_output=True, text=True)
             if res.returncode != 0:
                 raise PrintError(f"lp failed: {res.stderr.strip() or res.stdout.strip()}")
             m = self._REQ.search(res.stdout)
