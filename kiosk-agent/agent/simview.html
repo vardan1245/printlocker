@@ -14,7 +14,7 @@
   header { padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--card); display: flex; gap: 16px; align-items: baseline; }
   header h1 { font-size: 17px; margin: 0; }
   header .sub { color: var(--quiet); }
-  main { display: grid; grid-template-columns: 1fr 460px; gap: 24px; padding: 24px; align-items: start; }
+  main { display: grid; grid-template-columns: 1fr 560px; gap: 24px; padding: 24px; align-items: start; }
   .kiosk { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
   .column { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: 300px; }
   .printer { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
@@ -45,7 +45,10 @@
   .controls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
   aside { display: flex; flex-direction: column; gap: 16px; }
   .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
-  .screen-frame { width: 100%; height: 360px; border: 10px solid #26262a; border-radius: 14px; background: #000; display: block; }
+  /* the real screen is 800x480; shown at its true proportions, scaled to the panel */
+  .bezel { border: 12px solid #26262a; border-radius: 16px; background: #000; }
+  .screen-box { position: relative; width: 100%; aspect-ratio: 800 / 480; overflow: hidden; }
+  .screen-frame { position: absolute; top: 0; left: 0; width: 800px; height: 480px; border: 0; transform-origin: 0 0; }
   .logpanel { height: 300px; display: flex; flex-direction: column; }
   aside h2 { font-size: 14px; margin: 0 0 8px; }
   #log { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; overflow: auto; flex: 1; white-space: pre-wrap; color: #333; }
@@ -74,7 +77,10 @@
       <h2>Kiosk touchscreen</h2>
       <p class="small" style="margin:0 0 10px">This is the 7" screen on the front of the machine. Enter the PIN from the test page,
         or paste the QR text. The right compartment opens; then press <b>take &amp; close</b> on it.</p>
-      <iframe class="screen-frame" src="/kiosk?sim=1" title="Kiosk touchscreen"></iframe>
+      <div class="bezel"><div class="screen-box" id="screen-box">
+        <iframe class="screen-frame" id="screen" src="/kiosk?sim=1" title="Kiosk touchscreen"></iframe>
+      </div></div>
+      <p class="small" style="margin:8px 0 0">Real screen: 7", 800&times;480. <a href="/kiosk?sim=1" target="_blank">Open it at real size</a></p>
     </div>
     <div class="panel logpanel">
       <h2>Agent log</h2>
@@ -161,6 +167,13 @@ document.addEventListener('click', (e) => {
   if (b.dataset.clear) act({ type: 'clear_fault', printer_id: b.dataset.clear });
   if (b.dataset.paper) act({ type: 'toggle_paper', printer_id: b.dataset.paper });
 });
+
+function fitScreen() {
+  const box = document.getElementById('screen-box');
+  if (box) document.getElementById('screen').style.transform = `scale(${box.clientWidth / 800})`;
+}
+window.addEventListener('resize', fitScreen);
+fitScreen();
 
 async function tick() {
   try {
