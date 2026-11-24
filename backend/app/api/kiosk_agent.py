@@ -94,6 +94,13 @@ def set_status(job_id: int, body: KioskStatusIn, kiosk: Kiosk = Depends(current_
     return kiosk_job_out(job_svc.kiosk_transition(db, kiosk, job_id, body.status, body.error))
 
 
+@router.post("/recover")
+def recover(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)):
+    """Agent start-up: fail jobs that were mid-print; the agent blocks those printers."""
+    jobs = job_svc.recover_interrupted(db, kiosk)
+    return {"failed_jobs": [{"id": j.id, "printer_id": j.printer_id} for j in jobs]}
+
+
 @router.get("/codes", response_model=list[ActiveCode])
 def codes(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)):
     return [

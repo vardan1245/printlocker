@@ -112,6 +112,11 @@ class SimHardware(Hardware):
         with self.lock:
             self.columns[printer_id].update(tray_sheets=0, elevator_slot=0, pusher="home", error=None, busy=False)
 
+    def close_door(self, compartment_id: int) -> None:
+        """Simulator action: door shut without taking the paper."""
+        with self.lock:
+            self.compartments[compartment_id].update(door_closed=True, locked=True)
+
     def user_takes_paper_and_closes(self, compartment_id: int) -> None:
         """Simulator action: the user empties the compartment and shuts the door."""
         with self.lock:

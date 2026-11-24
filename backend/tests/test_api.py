@@ -284,3 +284,19 @@ def test_websocket_rejects_bad_token(client):
 def test_test_page(client):
     r = client.get("/")
     assert r.status_code == 200 and "PrintLocker" in r.text
+
+
+def test_recover_and_late_pickup(client, user, admin, kiosk):
+    job = upload(client, user, kiosk["printer_id"]).json()
+    client.post(f"{API}/kiosk/jobs/{job['id']}/status", json={"status": "printing"}, headers=kiosk["h"])
+    r = client.post(f"{API}/kiosk/recover", headers=kiosk["h"]).json()
+    assert {"id": job["id"], "printer_id": kiosk["printer_id"]} in r["failed_jobs"]
+    assert client.get(f"{API}/jobs/{job['id']}", headers=user).json()["status"] == "failed"
+
+    job2 = upload(client, user, kiosk["printer_id"]).json()
+    for s in ("printing", "delivering", "ready"):
+        client.post(f"{API}/kiosk/jobs/{job2['id']}/status", json={"status": s}, headers=kiosk["h"])
+    with SessionLocal() as db:
+        expire_due_jobs(db, now=datetime.now(timezone.utc) + timedelta(hours=25))
+    r = client.post(f"{API}/kiosk/pickup", json={"job_id": job2["id"], "method": "pin"}, headers=kiosk["h"])
+    assert r.status_code == 200 and r.json()["status"] == "collected"

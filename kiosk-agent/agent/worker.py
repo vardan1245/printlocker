@@ -17,7 +17,8 @@ class JobFailed(Exception):
     pass
 
 
-def process_job(job: dict, api: ApiClient, printer: PrinterDriver, hw: Hardware) -> str:
+def process_job(job: dict, api: ApiClient, printer: PrinterDriver, hw: Hardware,
+                on_ready=None) -> str:
     """Run one job to 'ready' or 'failed'. Returns the final status."""
     job_id = job["id"]
     try:
@@ -45,6 +46,8 @@ def process_job(job: dict, api: ApiClient, printer: PrinterDriver, hw: Hardware)
 
         api.set_status(job_id, "ready")
         log.info("job %s: ready", job_id)
+        if on_ready:
+            on_ready(job_id)  # e.g. fetch the new pickup code right away
         return "ready"
     except (JobFailed, PrintError, HardwareError, ValueError, ApiError, OfflineError) as exc:
         log.error("job %s failed: %s", job_id, exc)
@@ -62,11 +65,12 @@ class PrinterWorker(threading.Thread):
     """One per printer: poll for the next queued job and process it."""
 
     def __init__(self, api: ApiClient, printer: PrinterDriver, hw: Hardware, poll_seconds: float,
-                 stop: threading.Event):
+                 stop: threading.Event, on_ready=None):
         super().__init__(name=f"printer-{printer.printer_id}", daemon=True)
         self.api, self.printer, self.hw = api, printer, hw
         self.poll_seconds = poll_seconds
         self.stop_event = stop
+        self.on_ready = on_ready
 
     def run(self) -> None:
         while not self.stop_event.is_set():
@@ -80,7 +84,7 @@ class PrinterWorker(threading.Thread):
                 job = None
             if job:
                 try:
-                    process_job(job, self.api, self.printer, self.hw)
+                    process_job(job, self.api, self.printer, self.hw, self.on_ready)
                 except Exception:  # never let one bad job kill the printer loop
                     log.exception("printer %s: unexpected error", self.printer.printer_id)
                 continue  # look for the next job straight away

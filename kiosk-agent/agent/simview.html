@@ -14,7 +14,7 @@
   header { padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--card); display: flex; gap: 16px; align-items: baseline; }
   header h1 { font-size: 17px; margin: 0; }
   header .sub { color: var(--quiet); }
-  main { display: grid; grid-template-columns: 1fr 360px; gap: 24px; padding: 24px; }
+  main { display: grid; grid-template-columns: 1fr 460px; gap: 24px; padding: 24px; align-items: start; }
   .kiosk { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
   .column { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: 300px; }
   .printer { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
@@ -43,12 +43,15 @@
   .faults { border: 1px dashed var(--warn); background: #fffaf0; border-radius: 8px; padding: 8px 10px 10px; margin-bottom: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
   .faults-title { width: 100%; font-size: 12px; font-weight: 600; color: var(--warn); }
   .controls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
-  aside { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; height: calc(100vh - 120px); display: flex; flex-direction: column; }
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .screen-frame { width: 100%; height: 360px; border: 10px solid #26262a; border-radius: 14px; background: #000; display: block; }
+  .logpanel { height: 300px; display: flex; flex-direction: column; }
   aside h2 { font-size: 14px; margin: 0 0 8px; }
   #log { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; overflow: auto; flex: 1; white-space: pre-wrap; color: #333; }
   .legend { display: flex; gap: 14px; margin: 0 0 16px; color: var(--quiet); font-size: 12px; }
   .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; border: 1px solid var(--line); }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { height: 320px; } }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -67,8 +70,16 @@
     <div class="kiosk" id="kiosk"></div>
   </section>
   <aside>
-    <h2>Agent log</h2>
-    <div id="log"></div>
+    <div class="panel">
+      <h2>Kiosk touchscreen</h2>
+      <p class="small" style="margin:0 0 10px">This is the 7" screen on the front of the machine. Enter the PIN from the test page,
+        or paste the QR text. The right compartment opens; then press <b>take &amp; close</b> on it.</p>
+      <iframe class="screen-frame" src="/kiosk?sim=1" title="Kiosk touchscreen"></iframe>
+    </div>
+    <div class="panel logpanel">
+      <h2>Agent log</h2>
+      <div id="log"></div>
+    </div>
   </aside>
 </main>
 <script>
@@ -126,7 +137,8 @@ function render(st) {
             <div class="slot ${!c.door_closed ? 'open' : c.paper_sheets ? 'paper' : ''}">
               <span><span class="n">#${c.slot_no}</span>
                 <span class="small">${c.paper_sheets ? c.paper_sheets + ' sheets' : 'empty'} · ${c.door_closed ? (c.locked ? 'locked' : 'closed') : 'OPEN'}</span></span>
-              ${c.paper_sheets || !c.door_closed ? `<button data-take="${c.id}">take &amp; close</button>` : ''}
+              <span>${c.paper_sheets || !c.door_closed ? `<button data-take="${c.id}">take &amp; close</button>` : ''}
+              ${!c.door_closed ? `<button data-close="${c.id}">close only</button>` : ''}</span>
             </div>`).join('')}
         </div>
       </div>
@@ -142,6 +154,7 @@ function render(st) {
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b) return;
+  if (b.dataset.close) act({ type: 'close_door', compartment_id: b.dataset.close });
   if (b.dataset.take) act({ type: 'take_paper', compartment_id: b.dataset.take });
   if (b.dataset.jam) act({ type: 'jam_printer', printer_id: b.dataset.jam });
   if (b.dataset.fail) act({ type: 'fail_delivery' });

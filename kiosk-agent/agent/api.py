@@ -82,6 +82,10 @@ class ApiClient:
     def set_status(self, job_id: int, status: str, error: str | None = None) -> dict:
         return self._retrying("POST", f"/kiosk/jobs/{job_id}/status", {"status": status, "error": error})
 
+    def recover(self) -> dict:
+        """Fail jobs that were mid-print when the agent stopped; returns {'failed_jobs': [...]}."""
+        return self._retrying("POST", "/kiosk/recover", {})
+
     def codes(self) -> list[dict]:
         return self._request("GET", "/kiosk/codes")
 

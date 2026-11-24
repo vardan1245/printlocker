@@ -6,8 +6,13 @@ Self-service A4 print kiosk with QR-unlocked pickup compartments.
 | --- | --- |
 | M1 Backend core | done |
 | M2 Kiosk agent + hardware simulator | done |
-| M3 Pickup (touchscreen, QR/PIN, offline) | next |
-| M4 Flutter app · M5 Admin panel · M6 Real print · M7 Hardware design · M8 Firmware · M9 Prototype | later |
+| M3 Pickup (touchscreen, QR/PIN, offline) | done |
+| M4 Flutter app | next |
+| M5 Admin panel · M6 Real print · M7 Hardware design · M8 Firmware · M9 Prototype | later |
+
+**Live test setup (Render, free plan; first visit after idle takes ~1 min):**
+- Test page (log in, print, see QR + PIN): https://printlocker-api-xpqo.onrender.com
+- Kiosk simulator with touchscreen: https://printlocker-kiosk-sim-xpqo.onrender.com
 
 ```
 printlocker/
@@ -23,7 +28,9 @@ printlocker/
     ├── agent/layout.py     which pages go into which compartment (split jobs, duplex blanks)
     ├── agent/printers.py   SimPrinter and CupsPrinter (lp / lpstat)
     ├── agent/hardware.py   SimHardware and SerialHardware (ESP32, JSON lines)
-    ├── agent/simview.*     live simulator web page
+    ├── agent/pickup.py     offline code cache, QR/PIN check, PIN lockout, doors, pickup outbox
+    ├── agent/kiosk.html    7" touchscreen page (scan QR / enter PIN)
+    ├── agent/simview.*     local web server + simulator page
     └── tests/
 ```
 
@@ -84,6 +91,23 @@ comes in M5.
 
 ESP32 serial protocol (one JSON object per line) is documented in `kiosk-agent/agent/hardware.py`.
 
+### Pickup (M3)
+
+The touchscreen page is served by the agent at `http://localhost:<port>/kiosk`; on the real kiosk
+Chromium shows it full-screen. The USB QR scanner acts as a keyboard: it types the code and Enter.
+
+1. The agent keeps the active codes of its own ready jobs (`GET /kiosk/codes`, HMAC hashes only)
+   in `PL_DATA_DIR/codes.json`, refreshed every 10 s and as soon as a job becomes ready.
+2. QR (`PL1:<job>:<token>`) or 6-digit PIN is checked locally, so pickup works offline.
+3. A code works once, even offline. 5 wrong PINs in 10 min lock PIN entry for 5 min (QR still works).
+4. The job's compartment(s) unlock; when all its doors are closed again (or after 3 min) the pickup
+   is written to `PL_DATA_DIR/outbox.json` and sent to `POST /kiosk/pickup`, retried until the
+   server answers. A late report for a job the server already expired is accepted.
+5. Paper still detected after the door closes shows up as a compartment fault via the heartbeat.
+
+**Restart recovery:** on start-up the agent calls `POST /kiosk/recover`; jobs that were
+`printing`/`delivering` are failed and their printer columns are blocked until cleared.
+
 ## Backend API
 
 User app: `/api/v1/auth/*`, `/kiosks`, `/jobs` (+ `/preview`, `/{id}/pickup`), WebSocket
@@ -109,7 +133,5 @@ cd kiosk-agent && pip install -r requirements.txt && pytest -q
 
 ## Known gaps
 
-- If the agent crashes mid-job, that job stays `printing`; an admin fails it by hand (automatic
-  recovery on agent start-up comes later).
 - Live status runs in one backend process; several processes would need Redis pub/sub.
 - Alembic migrations come before the first real deployment (tables are created on start-up).

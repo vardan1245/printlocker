@@ -1,8 +1,16 @@
-"""Small web page that shows the simulated kiosk live (http://localhost:8100).
+"""The agent's local web server.
 
-GET  /            the page
-GET  /state       JSON: printers, columns, compartments, recent log lines
-POST /action      JSON {"type": "...", ...}: jam a printer, fail a delivery, take paper
+On the real kiosk, Chromium in kiosk mode shows http://localhost:<port>/kiosk on the
+7" touchscreen. In simulator mode, http://localhost:<port>/ shows the whole machine
+with the kiosk screen built in.
+
+GET  /                 simulator page (sim mode) or redirect to /kiosk
+GET  /kiosk            touchscreen page
+GET  /state            simulator JSON
+POST /action           simulator actions (jam, fail delivery, take paper, ...)
+GET  /api/status       kiosk screen status (open doors, PIN lock, online)
+POST /api/qr           {"code": "PL1:..."}  -> open compartment(s)
+POST /api/pin          {"pin": "123456"}    -> open compartment(s)
 """
 from __future__ import annotations
 
@@ -16,7 +24,8 @@ from pathlib import Path
 from .hardware import SimHardware
 from .printers import SimPrinter
 
-PAGE = Path(__file__).with_name("simview.html")
+SIM_PAGE = Path(__file__).with_name("simview.html")
+KIOSK_PAGE = Path(__file__).with_name("kiosk.html")
 
 
 class LogBuffer(logging.Handler):
@@ -61,6 +70,8 @@ class SimState:
             self.hw.clear_column(pid)
         elif t == "take_paper":
             self.hw.user_takes_paper_and_closes(int(a["compartment_id"]))
+        elif t == "close_door":
+            self.hw.close_door(int(a["compartment_id"]))
         else:
             return {"ok": False, "error": f"unknown action {t!r}"}
         logging.getLogger("agent.sim").info("simulator action: %s", t)
@@ -68,10 +79,18 @@ class SimState:
 
 
 class SimHolder:
-    """The page is served before the agent has reached the server; `sim` is set once it has."""
+    """Filled in once the agent has its configuration from the server.
+
+    sim:    SimState (simulator mode only)
+    pickup: PickupManager
+    online: callable returning whether the last heartbeat reached the server
+    """
 
     def __init__(self, sim: SimState | None = None):
         self.sim = sim
+        self.pickup = None
+        self.online = lambda: True
+        self.kiosk_name = ""
 
 
 def serve(sim: SimState | SimHolder, port: int) -> ThreadingHTTPServer:
@@ -89,27 +108,58 @@ def serve(sim: SimState | SimHolder, port: int) -> ThreadingHTTPServer:
             self.end_headers()
             self.wfile.write(body)
 
+        def _json(self, code: int, obj) -> None:
+            self._send(code, json.dumps(obj).encode(), "application/json")
+
+        def _body(self) -> dict:
+            n = int(self.headers.get("Content-Length", "0"))
+            return json.loads(self.rfile.read(n) or b"{}")
+
         def do_GET(self):
-            if self.path == "/":
-                self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-            elif self.path == "/state":
-                st = holder.sim.state() if holder.sim else {"connecting": True}
-                self._send(200, json.dumps(st).encode(), "application/json")
+            path = self.path.split("?")[0]
+            if path == "/":
+                if holder.sim is None and holder.pickup is not None:  # real kiosk: screen only
+                    self.send_response(302)
+                    self.send_header("Location", "/kiosk")
+                    self.end_headers()
+                    return
+                self._send(200, SIM_PAGE.read_bytes(), "text/html; charset=utf-8")
+            elif path == "/kiosk":
+                self._send(200, KIOSK_PAGE.read_bytes(), "text/html; charset=utf-8")
+            elif path == "/state":
+                self._json(200, holder.sim.state() if holder.sim else {"connecting": True})
+            elif path == "/api/status":
+                if holder.pickup is None:
+                    return self._json(200, {"ready": False, "online": False})
+                self._json(200, {"ready": True, "online": bool(holder.online()), "kiosk": holder.kiosk_name,
+                                 **holder.pickup.status()})
             else:
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            if self.path != "/action":
-                return self._send(404, b"not found", "text/plain")
-            if holder.sim is None:
-                return self._send(503, b'{"ok": false, "error": "connecting"}', "application/json")
+            path = self.path.split("?")[0]
             try:
-                n = int(self.headers.get("Content-Length", "0"))
-                result = holder.sim.action(json.loads(self.rfile.read(n) or b"{}"))
-            except (ValueError, KeyError) as exc:
-                result = {"ok": False, "error": str(exc)}
-            self._send(200 if result.get("ok") else 400, json.dumps(result).encode(), "application/json")
+                body = self._body()
+            except ValueError:
+                return self._json(400, {"ok": False, "error": "bad JSON"})
+            if path == "/action":
+                if holder.sim is None:
+                    return self._json(503, {"ok": False, "error": "connecting"})
+                try:
+                    result = holder.sim.action(body)
+                except (ValueError, KeyError) as exc:
+                    result = {"ok": False, "error": str(exc)}
+                return self._json(200 if result.get("ok") else 400, result)
+            if path in ("/api/qr", "/api/pin"):
+                if holder.pickup is None:
+                    return self._json(503, {"ok": False, "message": "The kiosk is starting, please wait."})
+                if path == "/api/qr":
+                    r = holder.pickup.scan_qr(str(body.get("code", "")))
+                else:
+                    r = holder.pickup.enter_pin(str(body.get("pin", "")))
+                return self._json(200, r.as_dict())
+            self._send(404, b"not found", "text/plain")
 
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
-    threading.Thread(target=server.serve_forever, name="simview", daemon=True).start()
+    threading.Thread(target=server.serve_forever, name="localweb", daemon=True).start()
     return server

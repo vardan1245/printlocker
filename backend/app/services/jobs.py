@@ -378,7 +378,19 @@ def report_pickup(db: Session, kiosk: Kiosk, job_id: int, method: str) -> Job:
     job = kiosk_job(db, kiosk, job_id)
     if job.status is JobStatus.COLLECTED:
         return job
-    if job.status is not JobStatus.READY:
+    if job.status not in (JobStatus.READY, JobStatus.EXPIRED):
         raise Conflict(f"job is '{job.status.value}', it cannot be collected")
     db.add(Event(kiosk_id=kiosk.id, job_id=job.id, type="pickup", payload={"method": method}))
     return transition_job(db, job.id, JobStatus.COLLECTED)
+
+
+def recover_interrupted(db: Session, kiosk: Kiosk) -> list[Job]:
+    """Called by an agent when it starts: jobs it was printing or delivering can't be finished."""
+    stuck = list(db.scalars(
+        select(Job).where(Job.kiosk_id == kiosk.id,
+                          Job.status.in_([JobStatus.PRINTING, JobStatus.DELIVERING])).order_by(Job.id)))
+    out = []
+    for job in stuck:
+        out.append(transition_job(db, job.id, JobStatus.FAILED,
+                                  error="interrupted: the kiosk restarted during this job"))
+    return out

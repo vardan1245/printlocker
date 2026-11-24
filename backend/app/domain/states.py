@@ -41,7 +41,8 @@ ALLOWED: dict[JobStatus, frozenset[JobStatus]] = {
     JobStatus.READY: frozenset({JobStatus.COLLECTED, JobStatus.EXPIRED}),
     JobStatus.COLLECTED: frozenset(),
     JobStatus.FAILED: frozenset(),
-    JobStatus.EXPIRED: frozenset(),
+    # A kiosk that was offline may report a pickup after the server already expired the job.
+    JobStatus.EXPIRED: frozenset({JobStatus.COLLECTED}),
     JobStatus.CANCELLED: frozenset(),
 }
 

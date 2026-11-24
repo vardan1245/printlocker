@@ -41,7 +41,8 @@ def test_happy_path_is_allowed():
 
 
 def test_terminal_states_have_no_exits():
-    for s in TERMINAL:
+    assert ALLOWED[S.EXPIRED] == frozenset({S.COLLECTED})  # late offline pickup report
+    for s in TERMINAL - {S.EXPIRED}:
         assert ALLOWED[s] == frozenset()
         for t in S:
             with pytest.raises(InvalidTransition):
@@ -76,6 +77,7 @@ def test_illegal_transitions(a, b):
         (S.PRINTING, S.FAILED, CS.FREE),
         (S.DELIVERING, S.FAILED, CS.FAULT),
         (S.READY, S.EXPIRED, CS.EXPIRED),
+        (S.EXPIRED, S.COLLECTED, CS.FREE),
     ],
 )
 def test_compartment_follows_job(a, b, expected):
