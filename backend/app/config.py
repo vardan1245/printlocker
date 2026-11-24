@@ -27,6 +27,25 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
 
+def fernet_key(secret: str) -> str:
+    """Use the value as a Fernet key if it is one, else derive one from it (SHA-256).
+
+    Lets hosting providers' generated secrets be used directly.
+    """
+    import base64
+    import hashlib
+
+    from cryptography.fernet import Fernet
+
+    if not secret:
+        raise RuntimeError("PL_FILE_KEY is not set")
+    try:
+        Fernet(secret.encode())
+        return secret
+    except ValueError:
+        return base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest()).decode()
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

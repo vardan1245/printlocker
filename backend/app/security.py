@@ -9,7 +9,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
 from cryptography.fernet import Fernet
 
-from .config import get_settings
+from .config import fernet_key, get_settings
 
 _ph = PasswordHasher()
 
@@ -62,10 +62,7 @@ def hash_api_key(key: str) -> str:
 # ---- small secrets encrypted at rest (PINs, QR tokens, kiosk code keys) ----
 
 def _fernet() -> Fernet:
-    key = get_settings().file_key
-    if not key:
-        raise RuntimeError("PL_FILE_KEY is not set")
-    return Fernet(key.encode())
+    return Fernet(fernet_key(get_settings().file_key).encode())
 
 
 def encrypt_str(value: str) -> str:

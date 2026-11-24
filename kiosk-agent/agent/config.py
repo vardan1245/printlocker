@@ -37,7 +37,7 @@ class AgentConfig:
             hardware_mode=e.get("PL_HARDWARE_MODE", "sim"),
             serial_port=e.get("PL_SERIAL_PORT", "/dev/ttyUSB0"),
             sim_speed=float(e.get("PL_SIM_SPEED", "1.0")),
-            sim_view_port=int(e.get("PL_SIM_VIEW_PORT", "8100")),
+            sim_view_port=int(e.get("PL_SIM_VIEW_PORT") or e.get("PORT") or "8100"),
             poll_seconds=float(e.get("PL_POLL_SECONDS", "2")),
             heartbeat_seconds=float(e.get("PL_HEARTBEAT_SECONDS", "15")),
             data_dir=e.get("PL_DATA_DIR", "./agent-data"),

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..config import get_settings
+from ..config import fernet_key, get_settings
 from ..domain import codes
 from ..domain.pdf import InvalidPdf, count_pdf_pages
 from ..domain.reservation import (
@@ -59,7 +59,7 @@ def notify(job: Job) -> None:
 
 def get_store() -> EncryptedFileStore:
     s = get_settings()
-    return EncryptedFileStore(s.storage_dir, s.file_key)
+    return EncryptedFileStore(s.storage_dir, fernet_key(s.file_key))
 
 
 @dataclass

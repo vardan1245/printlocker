@@ -1,0 +1,55 @@
+# Render Blueprint: backend API + PostgreSQL + one simulated kiosk (demo/test setup).
+# Free plan: services sleep after ~15 min without visits; the first visit wakes them (~1 min).
+# Uploaded PDFs live on the container's disk and are lost on redeploy (fine for testing).
+
+databases:
+  - name: printlocker-db
+    plan: free
+    databaseName: printlocker
+    user: printlocker
+
+services:
+  - type: web
+    name: printlocker-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerCommand: sh -c "python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: PL_DATABASE_URL
+        fromDatabase:
+          name: printlocker-db
+          property: connectionString
+      - key: PL_JWT_SECRET
+        generateValue: true
+      - key: PL_FILE_KEY
+        generateValue: true
+      - key: PL_DEMO_KIOSK_KEY
+        generateValue: true
+      - key: PL_ADMIN_EMAIL
+        value: admin@printlocker.local
+      - key: PL_ADMIN_PASSWORD
+        sync: false
+      - key: PL_STORAGE_DIR
+        value: /tmp/pdfs
+
+  - type: web
+    name: printlocker-kiosk-sim
+    runtime: docker
+    plan: free
+    rootDir: kiosk-agent
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PL_KIOSK_KEY
+        fromService:
+          type: web
+          name: printlocker-api
+          envVarKey: PL_DEMO_KIOSK_KEY
+      - key: PL_SERVER_URL
+        sync: false # https://<printlocker-api host>.onrender.com/api/v1
+      - key: PL_PRINTER_MODE
+        value: sim
+      - key: PL_HARDWARE_MODE
+        value: sim
