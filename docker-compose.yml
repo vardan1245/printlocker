@@ -26,7 +26,7 @@ services:
       PL_STORAGE_DIR: /data/pdfs
       PL_DEMO_KIOSK_KEY: *demo_key
     # seed is idempotent: creates the demo kiosk (2 printers x 5 compartments) and demo user once
-    command: sh -c "python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh start.sh
     volumes:
       - pdfs:/data/pdfs
     ports:
