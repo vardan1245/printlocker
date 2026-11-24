@@ -34,7 +34,10 @@ class PrinterDriver:
 
     def report(self) -> dict:
         """Status for the heartbeat: {'id', 'status', ...}."""
-        return {"id": self.printer_id, "status": "error" if self.blocked else "ok"}
+        r = {"id": self.printer_id, "status": "error" if self.blocked else "ok"}
+        if self.blocked:
+            r["message"] = self.blocked
+        return r
 
 
 class SimPrinter(PrinterDriver):
@@ -83,8 +86,12 @@ class SimPrinter(PrinterDriver):
 
     def report(self) -> dict:
         bad = self.blocked or self.state["error"] or not self.paper_ok
-        return {"id": self.printer_id, "status": "error" if bad else "ok",
-                "paper_ok": self.paper_ok, "toner_ok": self.toner_ok}
+        r = {"id": self.printer_id, "status": "error" if bad else "ok",
+             "paper_ok": self.paper_ok, "toner_ok": self.toner_ok}
+        msg = self.blocked or self.state["error"] or (None if self.paper_ok else "out of paper")
+        if msg:
+            r["message"] = msg
+        return r
 
 
 class CupsPrinter(PrinterDriver):
@@ -140,6 +147,11 @@ class CupsPrinter(PrinterDriver):
 
     def report(self) -> dict:
         try:
-            return {"id": self.printer_id, "status": "error" if self.blocked or self._disabled() else "ok"}
+            disabled = self._disabled()
+            r = {"id": self.printer_id, "status": "error" if self.blocked or disabled else "ok"}
+            msg = self.blocked or ("CUPS queue stopped (jam, paper or offline)" if disabled else None)
+            if msg:
+                r["message"] = msg
+            return r
         except OSError:
             return {"id": self.printer_id, "status": "offline"}

@@ -80,6 +80,13 @@ def create_app() -> FastAPI:
         html = page.read_text(encoding="utf-8").replace("__SIM_URL__", get_settings().simulator_url)
         return HTMLResponse(html)
 
+    admin_page = Path(__file__).with_name("static") / "admin.html"
+
+    @app.get("/admin", include_in_schema=False)
+    def admin_panel():
+        """Operator panel (login with an admin/operator account)."""
+        return HTMLResponse(admin_page.read_text(encoding="utf-8"))
+
     @app.get("/health", tags=["meta"])
     def health():
         return {"ok": True}

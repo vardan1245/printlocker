@@ -20,7 +20,9 @@ class RegisterIn(BaseModel):
 
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    # Plain string on purpose: accounts may use addresses a strict validator rejects
+    # (e.g. admin@printlocker.local); the lookup decides whether the account exists.
+    email: str = Field(min_length=3, max_length=255)
     password: str
 
 

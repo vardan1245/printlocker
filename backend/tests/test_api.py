@@ -49,9 +49,9 @@ def admin(client):
 
 @pytest.fixture(scope="module")
 def user(client):
-    r = client.post(f"{API}/auth/register", json={"email": "u1@test.local", "password": "password1"})
+    r = client.post(f"{API}/auth/register", json={"email": "u1@example.com", "password": "password1"})
     assert r.status_code == 201, r.text
-    return login(client, "u1@test.local", "password1")
+    return login(client, "u1@example.com", "password1")
 
 
 @pytest.fixture(scope="module")
@@ -83,10 +83,10 @@ def advance(client, admin, job_id, *states):
 
 def test_auth(client, user):
     assert client.get(f"{API}/auth/me").status_code == 401
-    assert client.get(f"{API}/auth/me", headers=user).json()["email"] == "u1@test.local"
-    r = client.post(f"{API}/auth/register", json={"email": "U1@test.local", "password": "password1"})
+    assert client.get(f"{API}/auth/me", headers=user).json()["email"] == "u1@example.com"
+    r = client.post(f"{API}/auth/register", json={"email": "U1@example.com", "password": "password1"})
     assert r.status_code == 409
-    r = client.post(f"{API}/auth/login", json={"email": "u1@test.local", "password": "wrong-pass"})
+    r = client.post(f"{API}/auth/login", json={"email": "u1@example.com", "password": "wrong-pass"})
     assert r.status_code == 401
 
 
@@ -159,8 +159,8 @@ def test_bad_uploads(client, user, printer_ids):
 
 def test_other_user_cannot_see_job(client, user, printer_ids):
     job = upload(client, user, printer_ids[0]).json()
-    client.post(f"{API}/auth/register", json={"email": "u2@test.local", "password": "password2"})
-    other = login(client, "u2@test.local", "password2")
+    client.post(f"{API}/auth/register", json={"email": "u2@example.com", "password": "password2"})
+    other = login(client, "u2@example.com", "password2")
     assert client.get(f"{API}/jobs/{job['id']}", headers=other).status_code == 404
     client.delete(f"{API}/jobs/{job['id']}", headers=user)
 

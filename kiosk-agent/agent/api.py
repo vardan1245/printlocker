@@ -86,6 +86,13 @@ class ApiClient:
         """Fail jobs that were mid-print when the agent stopped; returns {'failed_jobs': [...]}."""
         return self._retrying("POST", "/kiosk/recover", {})
 
+    def commands(self) -> list[dict]:
+        """Operator commands queued in the admin panel."""
+        return self._request("GET", "/kiosk/commands")
+
+    def command_done(self, command_id: int, ok: bool, error: str | None = None) -> dict:
+        return self._retrying("POST", f"/kiosk/commands/{command_id}/done", {"ok": ok, "error": error})
+
     def codes(self) -> list[dict]:
         return self._request("GET", "/kiosk/codes")
 

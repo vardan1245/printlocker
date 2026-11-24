@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from .api import ApiClient, ApiError, OfflineError
+from .commands import command_loop
 from .config import AgentConfig
 from .hardware import Hardware, SerialHardware, SimHardware
 from .pickup import CodeCache, Outbox, PickupManager
@@ -133,6 +134,7 @@ def main() -> None:
                                                   stop, status), name="heartbeat", daemon=True).start()
     threading.Thread(target=pickup_loop, args=(api, pickup, cache, outbox, stop), name="pickup",
                      daemon=True).start()
+    threading.Thread(target=command_loop, args=(api, hw, printers, stop), name="commands", daemon=True).start()
     for drv in printers.values():
         PrinterWorker(api, drv, hw, cfg.poll_seconds, stop, on_ready=lambda _id: cache.refresh(api)).start()
 
