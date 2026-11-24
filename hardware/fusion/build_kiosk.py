@@ -7,13 +7,13 @@ Model coordinates (mm): x = width (left to right), y = depth (front face y=0, to
 z = height from the floor. Converted to Fusion's Y-up or Z-up automatically.
 
 Construction: 30x30 aluminium extrusion frame, 1.5 mm powder-coated steel skins, folded sheet
-shelves and doors. One column = one printer + six compartments; columns bolt side by side.
+shelves and doors. One kiosk = one column = one printer + eight compartments.
 
 Layout of one column, bottom to top:
   0-80      levelling feet + base frame
   80-498    printer bay: Kyocera PA4500x on a pull-out shelf, PT-320 face-up output at the rear
-  498-1116  six compartments (82 mm opening, takes 500+ sheets), doors with solenoid locks
-  1116-1750 head: touch screen + QR scanner (column A) / blank panel (column B), electronics plate
+  498-1236  eight compartments (90 mm pitch, 72 mm opening, takes 500 sheets), doors with solenoid locks
+  1236-1750 head: touch screen (centre 1400) + QR scanner (1290), electronics plate behind
   rear shaft (y 500-858): paper lift on two lead screws; a pusher shoves the stack into a compartment
 """
 import adsk.core
@@ -26,11 +26,11 @@ P = dict(
     SHEET=2,           # shelf / plate thickness
     BASE=80,           # top of base frame (feet below)
     BAY_TOP=498,       # first shelf; shelf i top = BAY_TOP + 18 + i * PITCH
-    N=6,               # compartments per column
-    PITCH=100,         # shelf pitch -> 82 mm opening, takes a 500-sheet stack
+    N=8,               # compartments per column
+    PITCH=90,          # shelf pitch -> 72 mm opening, takes a 500-sheet stack (~50 mm)
     SHAFT_Y=500,       # compartments end / lift shaft starts
     DUCT_X=486,        # cable duct partition; locks live in the duct (488..528)
-    COLUMNS=2,         # 2 columns = 2 printers, 12 compartments
+    COLUMNS=1,         # 1 column = 1 printer; more columns bolt on the side
     LIFT_AT=3,         # show the lift level with compartment index (0..5), -1 = at the printer
     RECEIVE_TOP=346,   # platform top when catching paper from the printer
 )
@@ -227,8 +227,8 @@ def controller(c):
     top = P['H'] - P['SKIN'] - P['F']
     floor = P['BAY_TOP'] + 18 + P['N'] * P['PITCH']
     box(c, 'Electronics plate (2 mm steel)', xl, y, floor, P['W'] - 2 * xl, 2, top - floor, SHELF)
-    box(c, 'PSU 24 V 150 W (LRS-150-24)', 40, y - 30, 1150, 159, 30, 97, 'Steel - Galvanized (Small)')
-    box(c, 'Buck 24->12 V (locks)', 220, y - 22, 1150, 60, 22, 40, 'FR4')
+    box(c, 'PSU 24 V 150 W (LRS-150-24)', 40, y - 30, 1250, 159, 30, 97, 'Steel - Galvanized (Small)')
+    box(c, 'Buck 24->12 V (locks)', 220, y - 22, 1250, 60, 22, 40, 'FR4')
     box(c, 'Column controller (ESP32 + MCP23017 + 3x TMC2209)', 200, y - 25, 1460, 150, 25, 100, 'FR4')
     box(c, 'MOSFET board 8 ch (locks)', 370, y - 20, 1460, 140, 20, 55, 'FR4')
     box(c, 'Terminal blocks on DIN rail', 40, y - 35, 1620, 460, 35, 45, 'Plastic - Matte (Gray)')
@@ -244,17 +244,17 @@ def head_panel(c, name, holes):
 
 
 def head_a(c):
-    head_panel(c, 'Head panel (hinged service door)', [(183, -1, 1305, 194, 17, 110), (245, -1, 1200, 70, 17, 45)])
-    box(c, 'Touch screen 7in (800x480)', 183, 0, 1305, 194, 22, 110, 'Plastic - Glossy (Black)')
-    box(c, 'Scanner window', 245, 4, 1200, 70, 2, 45, 'Glass (Clear)')
-    box(c, 'QR scanner module', 250, 15, 1202, 60, 40, 41, 'Plastic - Matte (Black)')
-    box(c, 'Speaker', 410, 15, 1340, 40, 25, 40, 'Plastic - Matte (Black)')
+    head_panel(c, 'Head panel (hinged service door)', [(183, -1, 1345, 194, 17, 110), (245, -1, 1270, 70, 17, 45)])
+    box(c, 'Touch screen 7in (800x480)', 183, 0, 1345, 194, 22, 110, 'Plastic - Glossy (Black)')
+    box(c, 'Scanner window', 245, 4, 1270, 70, 2, 45, 'Glass (Clear)')
+    box(c, 'QR scanner module', 250, 15, 1272, 60, 40, 41, 'Plastic - Matte (Black)')
+    box(c, 'Speaker', 410, 15, 1380, 40, 25, 40, 'Plastic - Matte (Black)')
     box(c, 'Status LED strip', 40, -2, 1690, 480, 2, 10, 'LED (Green)')
     box(c, 'Logo plate', 180, -2, 1550, 200, 2, 60, 'Paint - Enamel Glossy (Blue)')
     y = P['SHAFT_Y'] - 2
-    box(c, 'Raspberry Pi 5 in case', 40, y - 32, 1300, 95, 32, 65, 'Plastic - Matte (Red)')
-    box(c, 'Buck 24->5 V 5 A (Pi)', 300, y - 22, 1150, 60, 22, 40, 'FR4')
-    box(c, 'Ethernet switch 5-port', 390, y - 26, 1150, 100, 26, 70, 'Plastic - Matte (Black)')
+    box(c, 'Raspberry Pi 5 in case', 40, y - 32, 1380, 95, 32, 65, 'Plastic - Matte (Red)')
+    box(c, 'Buck 24->5 V 5 A (Pi)', 300, y - 22, 1250, 60, 22, 40, 'FR4')
+    box(c, 'Ethernet switch 5-port', 390, y - 26, 1250, 100, 26, 70, 'Plastic - Matte (Black)')
 
 
 def head_b(c):

@@ -79,7 +79,7 @@ class PrinterCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     cups_queue: str = Field(min_length=1, max_length=100)
     duplex: bool = True
-    compartments: int = Field(default=5, ge=1, le=30)
+    compartments: int = Field(default=8, ge=1, le=30)
     capacity_sheets: int = Field(default=500, ge=50, le=2000)
 
 

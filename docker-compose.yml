@@ -25,7 +25,7 @@ services:
       PL_DATABASE_URL: postgresql+psycopg://printlocker:printlocker@db:5432/printlocker
       PL_STORAGE_DIR: /data/pdfs
       PL_DEMO_KIOSK_KEY: *demo_key
-    # seed is idempotent: creates the demo kiosk (2 printers x 5 compartments) and demo user once
+    # seed is idempotent: creates the demo kiosk (1 printer x 8 compartments) and demo user once
     command: sh start.sh
     volumes:
       - pdfs:/data/pdfs

@@ -1,4 +1,4 @@
-"""Create a demo kiosk with 2 printers x 5 compartments and a demo user.
+"""Create a demo kiosk with 1 printer x 8 compartments (the M7 hardware design) and a demo user.
 
 Run from the backend folder:  python -m scripts.seed
 Prints the kiosk API key once; keep it for the kiosk agent (M2).
@@ -23,8 +23,7 @@ def main() -> None:
         # PL_DEMO_KIOSK_KEY lets docker-compose start the simulated kiosk with a known key.
         kiosk, api_key = create_kiosk(db, "Demo kiosk", "Main building, ground floor",
                                       api_key=os.environ.get("PL_DEMO_KIOSK_KEY") or None)
-        add_printer(db, kiosk.id, "Printer A", "printer_a", duplex=True, compartments=5)
-        add_printer(db, kiosk.id, "Printer B", "printer_b", duplex=True, compartments=5)
+        add_printer(db, kiosk.id, "Printer A", "printer_a", duplex=True, compartments=8)
         if not db.scalar(select(User.id).where(User.email == "demo@example.com")):
             db.add(User(email="demo@example.com", password_hash=hash_password("demo12345")))
         db.commit()
