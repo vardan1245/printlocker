@@ -25,11 +25,15 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
     s = get_settings()
     with SessionLocal() as db:
-        if not db.scalar(select(User.id).where(User.role == Role.ADMIN)):
-            db.add(User(email=s.admin_email.lower(), password_hash=hash_password(s.admin_password),
-                        role=Role.ADMIN))
-            db.commit()
-            log.warning("created admin user %s, change its password", s.admin_email)
+        if db.scalar(select(User.id).where(User.role == Role.ADMIN)):
+            return
+        if len(s.admin_password) < 8:
+            log.warning("PL_ADMIN_PASSWORD not set (or shorter than 8 characters): no admin account created")
+            return
+        db.add(User(email=s.admin_email.lower(), password_hash=hash_password(s.admin_password),
+                    role=Role.ADMIN))
+        db.commit()
+        log.warning("created admin user %s", s.admin_email)
 
 
 async def _expiry_loop() -> None:

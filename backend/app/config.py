@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     expiry_check_seconds: int = 60
 
     admin_email: str = "admin@example.com"
-    admin_password: str = "admin12345"
+    # No default: without a password no admin account is created (never a guessable default).
+    admin_password: str = ""
 
     cors_origins: str = "*"
 
