@@ -180,3 +180,102 @@ def test_expiry_and_emptying(client, user, admin, printer_ids):
     assert len(expired) == 1
     r = client.post(f"{API}/admin/compartments/{expired[0]['id']}/emptied", headers=admin)
     assert r.json()["state"] == "free"
+
+
+# ---------------------------------------------------------------- kiosk agent endpoints (M2)
+
+@pytest.fixture(scope="module")
+def kiosk(client, admin):
+    r = client.post(f"{API}/admin/kiosks", json={"name": "K2"}, headers=admin)
+    key = r.json()["api_key"]
+    kid = r.json()["kiosk"]["id"]
+    r = client.post(f"{API}/admin/kiosks/{kid}/printers",
+                    json={"name": "P", "cups_queue": "p", "compartments": 3}, headers=admin)
+    return {"id": kid, "printer_id": r.json()["printers"][0]["id"], "h": {"X-Kiosk-Key": key}}
+
+
+def test_kiosk_auth(client, kiosk):
+    assert client.get(f"{API}/kiosk/config").status_code == 401
+    assert client.get(f"{API}/kiosk/config", headers={"X-Kiosk-Key": "nope"}).status_code == 401
+    cfg = client.get(f"{API}/kiosk/config", headers=kiosk["h"]).json()
+    assert cfg["kiosk_id"] == kiosk["id"] and len(cfg["compartments"]) == 3 and cfg["code_key"]
+
+
+def test_heartbeat_marks_online_and_printer_error(client, user, kiosk):
+    def status():
+        ks = client.get(f"{API}/kiosks/{kiosk['id']}", headers=user).json()
+        return ks["status"], ks["printers"][0]["status"]
+
+    assert status()[0] == "offline"
+    client.post(f"{API}/kiosk/heartbeat", headers=kiosk["h"],
+                json={"printers": [{"id": kiosk["printer_id"], "status": "error"}]})
+    assert status() == ("online", "error")
+    assert upload(client, user, kiosk["printer_id"]).status_code == 409  # printer down
+    client.post(f"{API}/kiosk/heartbeat", headers=kiosk["h"],
+                json={"printers": [{"id": kiosk["printer_id"], "status": "ok"}]})
+    assert status() == ("online", "ok")
+
+
+def test_agent_flow(client, user, kiosk):
+    import hashlib
+
+    from app.domain.codes import hash_code, parse_qr
+
+    job = upload(client, user, kiosk["printer_id"], pages=4).json()
+    nxt = client.get(f"{API}/kiosk/jobs/next", params={"printer_id": kiosk["printer_id"]},
+                     headers=kiosk["h"]).json()
+    assert nxt["id"] == job["id"] and nxt["parts"][0]["slot_no"] == 1 and nxt["cups_queue"] == "p"
+
+    for s in ("printing",):
+        assert client.post(f"{API}/kiosk/jobs/{job['id']}/status", json={"status": s},
+                           headers=kiosk["h"]).status_code == 200
+    pdf = client.get(f"{API}/kiosk/jobs/{job['id']}/file", headers=kiosk["h"]).content
+    assert hashlib.sha256(pdf).hexdigest() == nxt["file_sha256"]
+    for s in ("delivering", "ready", "ready"):  # repeated report is accepted (retry)
+        assert client.post(f"{API}/kiosk/jobs/{job['id']}/status", json={"status": s},
+                           headers=kiosk["h"]).status_code == 200
+    # file gone after printing
+    assert client.get(f"{API}/kiosk/jobs/{job['id']}/file", headers=kiosk["h"]).status_code == 409
+    # kiosk can't mark collected via status
+    assert client.post(f"{API}/kiosk/jobs/{job['id']}/status", json={"status": "collected"},
+                       headers=kiosk["h"]).status_code == 409
+
+    codes = client.get(f"{API}/kiosk/codes", headers=kiosk["h"]).json()
+    mine = next(c for c in codes if c["job_id"] == job["id"])
+    shown = client.get(f"{API}/jobs/{job['id']}/pickup", headers=user).json()
+    key = client.get(f"{API}/kiosk/config", headers=kiosk["h"]).json()["code_key"]
+    assert hash_code(key, shown["pin"]) == mine["pin_hash"]
+    assert hash_code(key, parse_qr(shown["qr"]).token) == mine["qr_token_hash"]
+
+    r = client.post(f"{API}/kiosk/pickup", json={"job_id": job["id"], "method": "qr"}, headers=kiosk["h"])
+    assert r.json()["status"] == "collected"
+    r = client.post(f"{API}/kiosk/pickup", json={"job_id": job["id"], "method": "qr"}, headers=kiosk["h"])
+    assert r.status_code == 200  # idempotent
+
+
+def test_kiosk_cannot_touch_other_kiosks_jobs(client, user, kiosk, printer_ids):
+    other = upload(client, user, printer_ids[0]).json()
+    r = client.post(f"{API}/kiosk/jobs/{other['id']}/status", json={"status": "printing"}, headers=kiosk["h"])
+    assert r.status_code == 404
+    client.delete(f"{API}/jobs/{other['id']}", headers=user)
+
+
+def test_websocket_live_status(client, user, admin, kiosk):
+    token = user["Authorization"].split()[1]
+    with client.websocket_connect(f"{API}/ws/user?token={token}") as ws:
+        assert ws.receive_json()["type"] == "hello"
+        job = upload(client, user, kiosk["printer_id"]).json()
+        msg = ws.receive_json()
+        assert msg["job_id"] == job["id"] and msg["status"] == "queued"
+        client.post(f"{API}/kiosk/jobs/{job['id']}/status", json={"status": "printing"}, headers=kiosk["h"])
+        assert ws.receive_json()["status"] == "printing"
+        client.post(f"{API}/admin/jobs/{job['id']}/status", json={"status": "failed"}, headers=admin)
+        assert ws.receive_json()["status"] == "failed"
+
+
+def test_websocket_rejects_bad_token(client):
+    from starlette.websockets import WebSocketDisconnect
+
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(f"{API}/ws/user?token=bad") as ws:
+            ws.receive_json()

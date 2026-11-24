@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PrintLocker kiosk simulator</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #fff; --ink: #1d1d1b; --quiet: #6b6a65; --line: #dcdad3;
+    --accent: #2f6fd6; --good: #2e8b57; --warn: #c98a12; --bad: #c0392b; --row: 58px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--card); display: flex; gap: 16px; align-items: baseline; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { color: var(--quiet); }
+  main { display: grid; grid-template-columns: 1fr 360px; gap: 24px; padding: 24px; }
+  .kiosk { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .column { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: 300px; }
+  .printer { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .printer .name { font-weight: 600; display: flex; justify-content: space-between; }
+  .bar { height: 6px; background: #ecebe6; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .small { font-size: 12px; color: var(--quiet); }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: #ecebe6; color: var(--quiet); font-weight: 500; }
+  .badge.err { background: #f7e1de; color: var(--bad); }
+  .badge.busy { background: #e1ebfa; color: var(--accent); }
+  .stack { display: grid; grid-template-columns: 56px 1fr; gap: 10px; }
+  .shaft { position: relative; background: repeating-linear-gradient(0deg, #f1f0ec, #f1f0ec var(--row), #e7e6e1 var(--row), #e7e6e1 calc(var(--row) + 1px)); border-radius: 6px; }
+  .tray { position: absolute; left: 6px; right: 6px; height: calc(var(--row) - 10px); background: #fff; border: 2px solid var(--accent); border-radius: 6px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; transition: top .35s ease; }
+  .tray.err { border-color: var(--bad); }
+  .tray .pusher { font-size: 10px; color: var(--quiet); }
+  .slots { display: flex; flex-direction: column; }
+  .slot { height: var(--row); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
+  .slot + .slot { margin-top: 0; }
+  .slot.top { border-style: dashed; color: var(--quiet); }
+  .slot.paper { background: #eef6f0; border-color: #b9dcc4; }
+  .slot.open { background: #fff6e0; border-color: var(--warn); }
+  .slot .n { font-weight: 600; }
+  button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+  button:hover { border-color: var(--ink); }
+  .controls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  aside { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; height: calc(100vh - 120px); display: flex; flex-direction: column; }
+  aside h2 { font-size: 14px; margin: 0 0 8px; }
+  #log { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; overflow: auto; flex: 1; white-space: pre-wrap; color: #333; }
+  .legend { display: flex; gap: 14px; margin: 0 0 16px; color: var(--quiet); font-size: 12px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; border: 1px solid var(--line); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { height: 320px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>PrintLocker kiosk simulator</h1>
+  <span class="sub" id="kname"></span>
+  <span class="sub" id="conn"></span>
+</header>
+<main>
+  <section>
+    <div class="legend">
+      <span><span class="sw" style="background:#eef6f0"></span>paper inside, locked</span>
+      <span><span class="sw" style="background:#fff6e0"></span>door open</span>
+      <span><span class="sw" style="background:#fff"></span>empty</span>
+    </div>
+    <div class="kiosk" id="kiosk"></div>
+  </section>
+  <aside>
+    <h2>Agent log</h2>
+    <div id="log"></div>
+  </aside>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const ROW = 58;
+
+async function act(body) {
+  await fetch('/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function render(st) {
+  $('#kname').textContent = st.kiosk || '';
+  const root = $('#kiosk');
+  root.innerHTML = '';
+  for (const p of st.printers) {
+    const col = st.columns[String(p.id)] || {};
+    const comps = st.compartments.filter(c => c.printer_id === p.id).sort((a, b) => a.slot_no - b.slot_no);
+    const pct = p.total ? Math.round(100 * p.printed / p.total) : 0;
+    const status = p.blocked ? '<span class="badge err">blocked</span>'
+                 : p.error ? `<span class="badge err">${esc(p.error)}</span>`
+                 : p.busy ? '<span class="badge busy">printing</span>' : '<span class="badge">idle</span>';
+    const div = document.createElement('div');
+    div.className = 'column';
+    div.innerHTML = `
+      <div class="printer">
+        <div class="name"><span>${esc(p.name)}</span>${status}</div>
+        <div class="small">${p.busy ? `${esc(p.title)} · sheet ${p.printed}/${p.total}` : 'waiting for jobs'}
+          ${p.paper_ok ? '' : ' · <b style="color:var(--bad)">out of paper</b>'}</div>
+        <div class="bar"><div style="width:${p.busy ? pct : 0}%"></div></div>
+        ${p.blocked ? `<div class="small" style="color:var(--bad);margin-top:6px">${esc(p.blocked)}. Takes no jobs until cleared.</div>
+          <div class="controls"><button data-clear="${p.id}">Operator: remove paper &amp; clear</button></div>` : ''}
+      </div>
+      <div class="stack">
+        <div class="shaft" style="height:${(comps.length + 1) * ROW}px">
+          <div class="tray ${col.error ? 'err' : ''}" style="top:${(col.elevator_slot || 0) * ROW + 5}px">
+            <div><b>${col.tray_sheets || 0}</b> sh</div>
+            <div class="pusher">${col.error ? 'error' : col.pusher === 'pushing' ? 'pushing →' : col.busy ? 'moving' : 'tray'}</div>
+          </div>
+        </div>
+        <div class="slots">
+          <div class="slot top"><span>printer output</span></div>
+          ${comps.map(c => `
+            <div class="slot ${!c.door_closed ? 'open' : c.paper_sheets ? 'paper' : ''}">
+              <span><span class="n">#${c.slot_no}</span>
+                <span class="small">${c.paper_sheets ? c.paper_sheets + ' sheets' : 'empty'} · ${c.door_closed ? (c.locked ? 'locked' : 'closed') : 'OPEN'}</span></span>
+              ${c.paper_sheets || !c.door_closed ? `<button data-take="${c.id}">take &amp; close</button>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="controls">
+        <button data-jam="${p.id}">Jam next print</button>
+        <button data-fail="1">Fail next delivery</button>
+        <button data-paper="${p.id}">${p.paper_ok ? 'Run out of paper' : 'Refill paper'}</button>
+      </div>`;
+    root.appendChild(div);
+  }
+  const log = $('#log');
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent = st.log.join('\n');
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.take) act({ type: 'take_paper', compartment_id: b.dataset.take });
+  if (b.dataset.jam) act({ type: 'jam_printer', printer_id: b.dataset.jam });
+  if (b.dataset.fail) act({ type: 'fail_delivery' });
+  if (b.dataset.clear) act({ type: 'clear_fault', printer_id: b.dataset.clear });
+  if (b.dataset.paper) act({ type: 'toggle_paper', printer_id: b.dataset.paper });
+});
+
+async function tick() {
+  try {
+    const r = await fetch('/state', { cache: 'no-store' });
+    render(await r.json());
+    $('#conn').textContent = '';
+  } catch (e) {
+    $('#conn').textContent = '· agent not reachable';
+  }
+  setTimeout(tick, 300);
+}
+tick();
+</script>
+</body>
+</html>

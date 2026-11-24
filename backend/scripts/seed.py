@@ -3,6 +3,8 @@
 Run from the backend folder:  python -m scripts.seed
 Prints the kiosk API key once; keep it for the kiosk agent (M2).
 """
+import os
+
 from sqlalchemy import select
 
 from app.db import SessionLocal
@@ -18,7 +20,9 @@ def main() -> None:
         if db.scalar(select(Kiosk.id).where(Kiosk.name == "Demo kiosk")):
             print("demo data already exists")
             return
-        kiosk, api_key = create_kiosk(db, "Demo kiosk", "Main building, ground floor")
+        # PL_DEMO_KIOSK_KEY lets docker-compose start the simulated kiosk with a known key.
+        kiosk, api_key = create_kiosk(db, "Demo kiosk", "Main building, ground floor",
+                                      api_key=os.environ.get("PL_DEMO_KIOSK_KEY") or None)
         add_printer(db, kiosk.id, "Printer A", "printer_a", duplex=True, compartments=5)
         add_printer(db, kiosk.id, "Printer B", "printer_b", duplex=True, compartments=5)
         if not db.scalar(select(User.id).where(User.email == "demo@example.com")):

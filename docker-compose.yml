@@ -1,3 +1,9 @@
+# Development setup: backend + PostgreSQL + one simulated kiosk.
+#   docker compose up --build
+#   API docs:        http://localhost:8000/docs
+#   Kiosk simulator: http://localhost:8100
+x-demo-key: &demo_key plk_demo_kiosk_key_for_local_development_only
+
 services:
   db:
     image: postgres:16
@@ -18,6 +24,9 @@ services:
     environment:
       PL_DATABASE_URL: postgresql+psycopg://printlocker:printlocker@db:5432/printlocker
       PL_STORAGE_DIR: /data/pdfs
+      PL_DEMO_KIOSK_KEY: *demo_key
+    # seed is idempotent: creates the demo kiosk (2 printers x 5 compartments) and demo user once
+    command: sh -c "python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
       - pdfs:/data/pdfs
     ports:
@@ -25,6 +34,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  kiosk-sim:
+    build: ./kiosk-agent
+    environment:
+      PL_SERVER_URL: http://backend:8000/api/v1
+      PL_KIOSK_KEY: *demo_key
+      PL_PRINTER_MODE: sim
+      PL_HARDWARE_MODE: sim
+      PL_SIM_SPEED: "1.0"
+    ports:
+      - "8100:8100"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

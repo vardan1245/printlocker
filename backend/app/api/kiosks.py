@@ -15,7 +15,7 @@ def kiosk_out(kiosk: Kiosk, free: dict[int, int]) -> KioskOut:
         id=kiosk.id,
         name=kiosk.name,
         location=kiosk.location,
-        status=kiosk.status.value,
+        status=svc.effective_status(kiosk),
         last_seen_at=kiosk.last_seen_at,
         printers=[
             PrinterOut(

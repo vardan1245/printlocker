@@ -137,3 +137,87 @@ class PickupOut(BaseModel):
 class StatusIn(BaseModel):
     status: JobStatus
     error: str | None = None
+
+
+# ---- kiosk agent ----
+
+class KioskCompartmentCfg(BaseModel):
+    id: int
+    printer_id: int
+    slot_no: int
+    capacity_sheets: int
+    state: CompartmentState
+
+
+class KioskPrinterCfg(BaseModel):
+    id: int
+    name: str
+    cups_queue: str
+    duplex: bool
+
+
+class KioskConfigOut(BaseModel):
+    kiosk_id: int
+    name: str
+    code_key: str  # HMAC key for checking pickup codes offline
+    pickup_hours: int
+    printers: list[KioskPrinterCfg]
+    compartments: list[KioskCompartmentCfg]
+
+
+class PrinterReport(BaseModel):
+    id: int
+    status: str | None = None
+    paper_ok: bool | None = None
+    toner_ok: bool | None = None
+
+
+class CompartmentReport(BaseModel):
+    id: int
+    door_closed: bool | None = None
+    paper_present: bool | None = None
+
+
+class HeartbeatIn(BaseModel):
+    printers: list[PrinterReport] = []
+    compartments: list[CompartmentReport] = []
+
+
+class KioskJobPart(BaseModel):
+    part_no: int
+    sheets: int
+    compartment_id: int
+    slot_no: int
+
+
+class KioskJobOut(BaseModel):
+    id: int
+    printer_id: int
+    cups_queue: str
+    status: JobStatus
+    pages: int
+    page_range: str | None
+    copies: int
+    duplex: bool
+    sheets: int
+    file_sha256: str
+    parts: list[KioskJobPart]
+
+
+class KioskStatusIn(BaseModel):
+    status: JobStatus
+    error: str | None = None
+
+
+class ActiveCode(BaseModel):
+    job_id: int
+    qr_token_hash: str
+    pin_hash: str
+    compartment_ids: list[int]
+    slots: list[int]
+    expires_at: datetime
+
+
+class PickupIn(BaseModel):
+    job_id: int
+    method: str = Field(pattern="^(qr|pin|admin)$")

@@ -1,92 +1,115 @@
 # PrintLocker
 
 Self-service A4 print kiosk with QR-unlocked pickup compartments.
-This repository currently contains **milestone M1: the backend**.
+
+| Milestone | Status |
+| --- | --- |
+| M1 Backend core | done |
+| M2 Kiosk agent + hardware simulator | done |
+| M3 Pickup (touchscreen, QR/PIN, offline) | next |
+| M4 Flutter app · M5 Admin panel · M6 Real print · M7 Hardware design · M8 Firmware · M9 Prototype | later |
 
 ```
 printlocker/
-├── docker-compose.yml      backend + PostgreSQL
-└── backend/
-    ├── app/
-    │   ├── domain/         pure business rules (no web/DB imports) — reused by the kiosk agent later
-    │   │   ├── states.py       job state machine + compartment state per job state
-    │   │   ├── sheets.py       page ranges, sheet count, splitting big jobs across compartments
-    │   │   ├── reservation.py  picking free compartments
-    │   │   ├── pdf.py          PDF validation + page count
-    │   │   ├── codes.py        QR tokens, 6-digit PINs, per-kiosk HMAC hashes
-    │   │   └── storage.py      encrypted PDF storage on disk
-    │   ├── services/       use cases on top of the database (create job, transitions, expiry, kiosks)
-    │   ├── api/            FastAPI routes: auth, kiosks, jobs, admin
-    │   ├── models.py       SQLAlchemy tables
-    │   ├── schemas.py      request/response models
-    │   └── main.py         app, startup, expiry background loop
-    ├── scripts/seed.py     demo kiosk (2 printers × 5 compartments) + demo user
-    └── tests/              domain tests + end-to-end API tests
+├── docker-compose.yml      backend + PostgreSQL + one simulated kiosk
+├── backend/                FastAPI API (users, kiosks, jobs, kiosk-agent endpoints, live status)
+│   ├── app/domain/         pure business rules (states, sheets, reservation, PDF, codes, storage)
+│   ├── app/services/       use cases on the database
+│   ├── app/api/            routes: auth, kiosks, jobs, admin, kiosk (agent), ws (live status)
+│   └── tests/
+└── kiosk-agent/            program that runs on each kiosk's Raspberry Pi
+    ├── agent/main.py       start-up, heartbeat, one worker thread per printer
+    ├── agent/worker.py     one job: download → print part by part → elevator → report
+    ├── agent/layout.py     which pages go into which compartment (split jobs, duplex blanks)
+    ├── agent/printers.py   SimPrinter and CupsPrinter (lp / lpstat)
+    ├── agent/hardware.py   SimHardware and SerialHardware (ESP32, JSON lines)
+    ├── agent/simview.*     live simulator web page
+    └── tests/
 ```
 
-## Run with Docker
+## Run everything (Docker)
 
 ```bash
-cd backend
-cp .env.example .env
+cd backend && cp .env.example .env
 # put a key into PL_FILE_KEY:
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-cd ..
-docker compose up --build
-docker compose exec backend python -m scripts.seed   # demo kiosk + demo user
+cd .. && docker compose up --build
 ```
 
-Open http://localhost:8000/docs for the interactive API.
+- API docs: http://localhost:8000/docs
+- Kiosk simulator: http://localhost:8100
+- Demo user: `demo@example.com` / `demo12345` · admin: from `PL_ADMIN_EMAIL` / `PL_ADMIN_PASSWORD`
 
-## Run locally without Docker (SQLite)
+Try it: in `/docs`, log in as the demo user, `GET /kiosks`, then `POST /jobs` with a PDF and a
+printer id. Watch the simulator: the printer prints, the elevator carries the stack down, it is
+pushed into the compartment, and the job becomes `ready`. `GET /jobs/{id}/pickup` shows the QR
+text and PIN.
 
-```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env    # set PL_FILE_KEY and PL_JWT_SECRET
-python -m scripts.seed
-uvicorn app.main:app --reload
-```
+The simulator page also lets you jam a printer, fail a delivery, run out of paper, and act as the
+operator who clears a fault.
+
+## Kiosk agent
+
+Runs on the Raspberry Pi. Settings are environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PL_SERVER_URL` | `http://localhost:8000/api/v1` | backend |
+| `PL_KIOSK_KEY` | — | key shown once when the kiosk was created |
+| `PL_PRINTER_MODE` | `sim` | `sim` or `cups` (real printers; CUPS queue name = printer's `cups_queue`) |
+| `PL_HARDWARE_MODE` | `sim` | `sim` or `serial` (ESP32 controller) |
+| `PL_SERIAL_PORT` | `/dev/ttyUSB0` | ESP32 port |
+| `PL_SIM_SPEED` | `1.0` | simulator timing; `0` = instant |
+| `PL_SIM_VIEW_PORT` | `8100` | simulator page; `0` = off |
+| `PL_POLL_SECONDS` / `PL_HEARTBEAT_SECONDS` | `2` / `15` | polling intervals |
+
+Without Docker: `cd kiosk-agent && pip install -r requirements.txt && PL_KIOSK_KEY=... python -m agent.main`
+
+How a job runs:
+1. Each printer has its own worker thread that asks `GET /kiosk/jobs/next?printer_id=…`.
+2. It reports `printing`, downloads the PDF and checks its SHA-256.
+3. It builds the face sequence (page range × copies; a blank back when a duplex copy has an odd
+   page count, so every copy starts on a new sheet) and cuts it into the parts the server
+   reserved (max 500 sheets per compartment).
+4. For each part: print that part's own PDF → the elevator carries the stack to the compartment →
+   the pusher slides it in. Before the last delivery it reports `delivering`.
+5. It reports `ready`. The server then shows the user the QR and PIN.
+
+**Safety rule:** after a paper jam, an empty paper tray or a failed delivery, the job is marked
+`failed` and that printer column is **blocked**: it reports `error` in its heartbeat (so the
+server stops accepting jobs for it) and takes no new jobs until an operator removes leftover paper
+and clears it. This stops one user's pages from landing on top of another user's leftovers.
+On the real kiosk, clearing is done by restarting the agent for now; an admin-panel button
+comes in M5.
+
+ESP32 serial protocol (one JSON object per line) is documented in `kiosk-agent/agent/hardware.py`.
+
+## Backend API
+
+User app: `/api/v1/auth/*`, `/kiosks`, `/jobs` (+ `/preview`, `/{id}/pickup`), WebSocket
+`/api/v1/ws/user?token=<access token>` for live job status.
+
+Kiosk agent (header `X-Kiosk-Key`): `GET /kiosk/config`, `POST /kiosk/heartbeat`,
+`GET /kiosk/jobs/next`, `GET /kiosk/jobs/{id}/file`, `POST /kiosk/jobs/{id}/status`
+(`printing` / `delivering` / `ready` / `failed`, repeat-safe), `GET /kiosk/codes`,
+`POST /kiosk/pickup` (repeat-safe).
+
+Admin: create kiosks and printers, list compartments and jobs, move a job by hand,
+mark a compartment emptied, run expiry now.
+
+A kiosk counts as online if it sent a heartbeat in the last 90 s. If a kiosk reports paper in a
+compartment the server thinks is free, that compartment is set to `fault`.
 
 ## Tests
 
 ```bash
-cd backend
-pytest -q
+cd backend && pip install -r requirements.txt && pytest -q
+cd kiosk-agent && pip install -r requirements.txt && pytest -q
 ```
 
-`tests/test_domain.py` covers the rules (state machine, page ranges, sheet counts, split jobs,
-reservation, PDF checks, codes, encryption). `tests/test_api.py` runs the whole flow through
-the HTTP API on SQLite: register/login, kiosk list, preview, upload, status changes, pickup codes,
-cancel, split job, full column, bad uploads, access control, expiry and emptying a compartment.
+## Known gaps
 
-## Try the flow by hand (until the kiosk agent exists)
-
-1. `POST /api/v1/auth/login` as `demo@example.com` / `demo12345`, copy the access token.
-2. `GET /api/v1/kiosks` → pick a printer id.
-3. `POST /api/v1/jobs` (multipart: `file`, `printer_id`, optional `copies`, `page_range`, `duplex`) → status `queued`.
-4. As admin, `POST /api/v1/admin/jobs/{id}/status` with `printing`, then `delivering`, then `ready`
-   (this is what the kiosk agent will do in M2).
-5. `GET /api/v1/jobs/{id}/pickup` → QR text + PIN + compartment number.
-6. Admin sets `collected` → compartment is free again.
-
-## Rules implemented
-
-| Rule | Where |
-| --- | --- |
-| Job states: uploaded → queued → printing → delivering → ready → collected; side exits failed / expired / cancelled | `domain/states.py` |
-| User can cancel only while uploaded/queued | `domain/states.py` |
-| Sheets = selected pages × copies; duplex halves per copy (each copy starts on a new sheet) | `domain/sheets.py` |
-| A compartment holds 500 sheets; bigger jobs are split into balanced parts (700 → 350 + 350) | `domain/sheets.py` |
-| Job is accepted only if the printer's column has enough free compartments; lowest slots first | `domain/reservation.py`, `services/jobs.py` |
-| Compartments: reserved at queue, occupied at ready, freed at collect/cancel/failed; fault if delivery fails; expired after 24 h until an operator empties it | `domain/states.py` |
-| PDF stored encrypted; deleted once printing finishes or the job ends | `domain/storage.py`, `services/jobs.py` |
-| PIN unique among active jobs on that kiosk; QR = `PL1:<job>:<token>`; kiosk gets only HMAC hashes | `domain/codes.py` |
-
-## Not in M1 (next milestones)
-
-- Kiosk agent endpoints (heartbeat, next job, status, offline code cache, pickup report) — **M2/M3**
-- WebSocket live status — M2
-- PIN brute-force lockout at the kiosk — M3
-- Alembic migrations — before the first real deployment (M1 uses `create_all`)
+- If the agent crashes mid-job, that job stays `printing`; an admin fails it by hand (automatic
+  recovery on agent start-up comes later).
+- Live status runs in one backend process; several processes would need Redis pub/sub.
+- Alembic migrations come before the first real deployment (tables are created on start-up).

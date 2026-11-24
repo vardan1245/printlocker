@@ -25,6 +25,7 @@ from ..domain.states import (
 )
 from ..domain.storage import EncryptedFileStore
 from ..models import Compartment, Event, Job, JobCompartment, Kiosk, Printer, PrinterStatus, User
+from ..realtime import hub
 from ..security import decrypt_str, encrypt_str
 from .errors import BadRequest, Conflict, NotFound
 
@@ -42,6 +43,18 @@ _DELETE_FILE_ON = {JobStatus.DELIVERING} | set(TERMINAL)
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def notify(job: Job) -> None:
+    """Push the job's new status to the owner's open app sessions."""
+    hub.publish_threadsafe(job.user_id, {
+        "type": "job",
+        "job_id": job.id,
+        "status": job.status.value,
+        "compartments": [p.compartment.slot_no for p in job.parts],
+        "error": job.error,
+        "expires_at": job.expires_at.isoformat() if job.expires_at else None,
+    })
 
 
 def get_store() -> EncryptedFileStore:
@@ -192,6 +205,7 @@ def create_job(
         store.delete(file_name)
         raise
     db.refresh(job)
+    notify(job)
     return job
 
 
@@ -246,6 +260,7 @@ def transition_job(
     _apply_transition(db, job, target, error=error, store=store)
     db.commit()
     db.refresh(job)
+    notify(job)
     return job
 
 
@@ -305,4 +320,65 @@ def expire_due_jobs(db: Session, now: datetime | None = None) -> int:
                      payload={"task": "empty_compartments",
                               "compartments": [p.compartment_id for p in job.parts]}))
     db.commit()
+    for job in due:
+        notify(job)
     return len(due)
+
+
+# ---------------------------------------------------------------- kiosk side
+
+KIOSK_TARGETS = frozenset({JobStatus.PRINTING, JobStatus.DELIVERING, JobStatus.READY, JobStatus.FAILED})
+
+
+def kiosk_job(db: Session, kiosk: Kiosk, job_id: int) -> Job:
+    job = db.get(Job, job_id)
+    if job is None or job.kiosk_id != kiosk.id:
+        raise NotFound("job")
+    return job
+
+
+def next_job(db: Session, kiosk: Kiosk, printer_id: int | None = None) -> Job | None:
+    """Oldest queued job for this kiosk (optionally one printer)."""
+    q = select(Job).where(Job.kiosk_id == kiosk.id, Job.status == JobStatus.QUEUED)
+    if printer_id is not None:
+        q = q.where(Job.printer_id == printer_id)
+    return db.scalar(q.order_by(Job.id).limit(1))
+
+
+def load_job_pdf(db: Session, kiosk: Kiosk, job_id: int, store: EncryptedFileStore | None = None) -> bytes:
+    job = kiosk_job(db, kiosk, job_id)
+    if job.status not in (JobStatus.QUEUED, JobStatus.PRINTING) or not job.file_path:
+        raise Conflict(f"job is '{job.status.value}', its file is no longer available")
+    return (store or get_store()).load(job.file_path)
+
+
+def kiosk_transition(
+    db: Session, kiosk: Kiosk, job_id: int, target: JobStatus, error: str | None = None,
+    store: EncryptedFileStore | None = None,
+) -> Job:
+    if target not in KIOSK_TARGETS:
+        raise Conflict(f"a kiosk cannot set status '{target.value}'")
+    job = kiosk_job(db, kiosk, job_id)
+    if job.status is target:  # agent retried after a network error: already applied
+        return job
+    return transition_job(db, job.id, target, error, store=store)
+
+
+def active_codes(db: Session, kiosk: Kiosk) -> list[Job]:
+    """Ready jobs on this kiosk; the agent caches their code hashes for offline pickup."""
+    return list(
+        db.scalars(
+            select(Job).where(Job.kiosk_id == kiosk.id, Job.status == JobStatus.READY).order_by(Job.id)
+        )
+    )
+
+
+def report_pickup(db: Session, kiosk: Kiosk, job_id: int, method: str) -> Job:
+    """Kiosk says the user took the paper. Idempotent (offline reports may be resent)."""
+    job = kiosk_job(db, kiosk, job_id)
+    if job.status is JobStatus.COLLECTED:
+        return job
+    if job.status is not JobStatus.READY:
+        raise Conflict(f"job is '{job.status.value}', it cannot be collected")
+    db.add(Event(kiosk_id=kiosk.id, job_id=job.id, type="pickup", payload={"method": method}))
+    return transition_job(db, job.id, JobStatus.COLLECTED)

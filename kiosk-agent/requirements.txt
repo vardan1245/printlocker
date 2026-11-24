@@ -1,0 +1,5 @@
+pypdf>=4.2
+# real kiosk only (PL_HARDWARE_MODE=serial):
+pyserial>=3.5
+# tests
+pytest>=8

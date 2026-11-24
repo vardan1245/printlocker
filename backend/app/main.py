@@ -12,6 +12,7 @@ from sqlalchemy import select
 from .config import get_settings
 from .db import Base, SessionLocal, engine
 from .models import Role, User
+from .realtime import hub
 from .security import hash_password
 from .services.errors import ServiceError
 from .services.jobs import expire_due_jobs
@@ -47,13 +48,15 @@ async def _expiry_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    hub.bind_loop(asyncio.get_running_loop())
     task = asyncio.create_task(_expiry_loop())
     yield
     task.cancel()
+    hub.bind_loop(None)
 
 
 def create_app() -> FastAPI:
-    from .api import admin, auth, jobs, kiosks
+    from .api import admin, auth, jobs, kiosk_agent, kiosks, ws
 
     app = FastAPI(title="PrintLocker API", version="0.1.0", lifespan=lifespan)
     origins = [o.strip() for o in get_settings().cors_origins.split(",") if o.strip()]
@@ -68,7 +71,7 @@ def create_app() -> FastAPI:
     def health():
         return {"ok": True}
 
-    for r in (auth.router, kiosks.router, jobs.router, admin.router):
+    for r in (auth.router, kiosks.router, jobs.router, admin.router, kiosk_agent.router, ws.router):
         app.include_router(r, prefix="/api/v1")
     return app
 

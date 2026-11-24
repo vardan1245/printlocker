@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..domain.states import CompartmentState
-from ..models import Compartment, Event, Kiosk, Printer
+from ..models import Compartment, Event, Kiosk, KioskStatus, Printer, PrinterStatus
 from ..security import encrypt_str, hash_api_key, new_api_key
 from .errors import NotFound
 
 
-def create_kiosk(db: Session, name: str, location: str = "") -> tuple[Kiosk, str]:
-    """Create a kiosk. Returns (kiosk, api_key); the raw key is shown only once."""
-    api_key = new_api_key()
+def create_kiosk(
+    db: Session, name: str, location: str = "", api_key: str | None = None
+) -> tuple[Kiosk, str]:
+    """Create a kiosk. Returns (kiosk, api_key); the raw key is shown only once.
+
+    `api_key` may be given for demo/dev setups (docker-compose); otherwise it is random.
+    """
+    api_key = api_key or new_api_key()
     kiosk = Kiosk(
         name=name,
         location=location,
@@ -95,3 +101,49 @@ def mark_compartment_emptied(db: Session, compartment_id: int) -> Compartment:
         )
     )
     return comp
+
+
+ONLINE_WINDOW_SECONDS = 90
+
+
+def effective_status(kiosk: Kiosk, now: datetime | None = None) -> str:
+    """'online' only if the agent sent a heartbeat recently."""
+    if kiosk.status is KioskStatus.MAINTENANCE:
+        return kiosk.status.value
+    now = now or datetime.now(timezone.utc)
+    seen = kiosk.last_seen_at
+    if seen is None:
+        return KioskStatus.OFFLINE.value
+    if seen.tzinfo is None:  # SQLite returns naive UTC
+        seen = seen.replace(tzinfo=timezone.utc)
+    return (KioskStatus.ONLINE if now - seen <= timedelta(seconds=ONLINE_WINDOW_SECONDS)
+            else KioskStatus.OFFLINE).value
+
+
+def authenticate_kiosk(db: Session, api_key: str) -> Kiosk | None:
+    return db.scalar(select(Kiosk).where(Kiosk.api_key_hash == hash_api_key(api_key)))
+
+
+def heartbeat(db: Session, kiosk: Kiosk, printers: list[dict], compartments: list[dict]) -> None:
+    """Store what the kiosk reports about its printers and compartment sensors."""
+    kiosk.last_seen_at = datetime.now(timezone.utc)
+    if kiosk.status is not KioskStatus.MAINTENANCE:
+        kiosk.status = KioskStatus.ONLINE
+    by_id = {p.id: p for p in kiosk.printers}
+    for rep in printers:
+        p = by_id.get(rep.get("id"))
+        if p is None:
+            continue
+        if "status" in rep:
+            p.status = PrinterStatus(rep["status"])
+        for key in ("paper_ok", "toner_ok"):
+            if key in rep:
+                setattr(p, key, bool(rep[key]))
+    # Sensor mismatch (paper seen in a compartment the server thinks is free) -> fault.
+    comps = {c.id: c for c in db.scalars(select(Compartment).where(Compartment.kiosk_id == kiosk.id))}
+    for rep in compartments:
+        c = comps.get(rep.get("id"))
+        if c is not None and rep.get("paper_present") and c.state is CompartmentState.FREE:
+            c.state = CompartmentState.FAULT
+            db.add(Event(kiosk_id=kiosk.id, type="compartment_fault",
+                         payload={"compartment_id": c.id, "reason": "paper in a free compartment"}))
