@@ -9,8 +9,9 @@ Self-service A4 print kiosk with QR-unlocked pickup compartments.
 | M3 Pickup (touchscreen, QR/PIN, offline) | done |
 | M4 Flutter app | done |
 | M5 Admin panel (`/admin` on the API: live overview, open doors, clear printers, jobs, events, setup) | done |
-| M6 Real print | next |
-| M7 Hardware design · M8 Firmware · M9 Prototype | later |
+| M6 Real print | waiting for the printer |
+| M7 Hardware design ([`hardware/`](hardware/README.md): Fusion model script, BOM, wiring) | draft done |
+| M8 Firmware · M9 Prototype | later |
 
 **Live test setup (Render + Vercel, free plans; first visit after idle takes ~1 min):**
 - User app (Flutter web): https://printlocker-app.vercel.app · Android APK: GitHub Actions → "Flutter app" run → Artifacts
