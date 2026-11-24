@@ -6,6 +6,7 @@ from ..db import get_db
 from ..domain.states import JobStatus
 from ..models import Compartment, Job, User
 from ..schemas import (
+    CommandOut,
     CompartmentOut,
     JobOut,
     KioskCreatedOut,
@@ -14,6 +15,7 @@ from ..schemas import (
     PrinterCreateIn,
     StatusIn,
 )
+from ..services import admin as admin_svc
 from ..services import jobs as job_svc
 from ..services import kiosks as kiosk_svc
 from .deps import require_admin
@@ -75,3 +77,32 @@ def set_status(job_id: int, body: StatusIn, db: Session = Depends(get_db),
 @router.post("/expire-now")
 def expire_now(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return {"expired": job_svc.expire_due_jobs(db)}
+
+
+@router.get("/overview")
+def overview(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Everything the panel's main screen needs in one call."""
+    return admin_svc.overview(db)
+
+
+@router.get("/events")
+def events(limit: int = 100, kiosk_id: int | None = None, db: Session = Depends(get_db),
+           _: User = Depends(require_admin)):
+    return admin_svc.events(db, limit, kiosk_id)
+
+
+@router.post("/compartments/{compartment_id}/unlock", response_model=CommandOut, status_code=202)
+def unlock(compartment_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    """Ask the kiosk to open this compartment's door (e.g. to empty an expired one)."""
+    return admin_svc.unlock_compartment(db, compartment_id, user.id)
+
+
+@router.post("/printers/{printer_id}/clear", response_model=CommandOut, status_code=202)
+def clear_printer(printer_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    """After removing loose paper: tell the kiosk the printer column may take jobs again."""
+    return admin_svc.clear_printer(db, printer_id, user.id)
+
+
+@router.get("/commands", response_model=list[CommandOut])
+def commands(kiosk_id: int | None = None, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    return admin_svc.list_commands(db, kiosk_id)

@@ -168,6 +168,7 @@ class KioskConfigOut(BaseModel):
 class PrinterReport(BaseModel):
     id: int
     status: str | None = None
+    message: str | None = None  # e.g. why the agent blocked this printer
     paper_ok: bool | None = None
     toner_ok: bool | None = None
 
@@ -221,3 +222,21 @@ class ActiveCode(BaseModel):
 class PickupIn(BaseModel):
     job_id: int
     method: str = Field(pattern="^(qr|pin|admin)$")
+
+
+# ---- admin / commands ----
+
+class CommandOut(ORM):
+    id: int
+    kiosk_id: int
+    type: str
+    payload: dict
+    status: str
+    error: str | None
+    created_at: datetime
+    done_at: datetime | None
+
+
+class CommandDoneIn(BaseModel):
+    ok: bool
+    error: str | None = None

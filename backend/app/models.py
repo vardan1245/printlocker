@@ -161,3 +161,34 @@ class Event(Base):
     type: Mapped[str] = mapped_column(String(50))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CommandStatus(str, Enum):
+    PENDING = "pending"  # waiting for the kiosk to pick it up
+    SENT = "sent"  # kiosk has it
+    DONE = "done"
+    FAILED = "failed"
+
+
+class KioskCommand(Base):
+    """An operator action the kiosk must carry out (open a door, clear a printer)."""
+
+    __tablename__ = "kiosk_commands"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kiosk_id: Mapped[int] = mapped_column(ForeignKey("kiosks.id"), index=True)
+    type: Mapped[str] = mapped_column(String(30))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[CommandStatus] = mapped_column(_enum(CommandStatus), default=CommandStatus.PENDING, index=True)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class KioskSnapshot(Base):
+    """Last heartbeat as the kiosk sent it: printer states (with reasons) and door/paper sensors."""
+
+    __tablename__ = "kiosk_snapshots"
+    kiosk_id: Mapped[int] = mapped_column(ForeignKey("kiosks.id"), primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

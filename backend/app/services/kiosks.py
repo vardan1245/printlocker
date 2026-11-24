@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..domain.states import CompartmentState
-from ..models import Compartment, Event, Kiosk, KioskStatus, Printer, PrinterStatus
+from ..models import Compartment, Event, Kiosk, KioskSnapshot, KioskStatus, Printer, PrinterStatus
 from ..security import encrypt_str, hash_api_key, new_api_key
 from .errors import NotFound
 
@@ -127,6 +127,12 @@ def authenticate_kiosk(db: Session, api_key: str) -> Kiosk | None:
 def heartbeat(db: Session, kiosk: Kiosk, printers: list[dict], compartments: list[dict]) -> None:
     """Store what the kiosk reports about its printers and compartment sensors."""
     kiosk.last_seen_at = datetime.now(timezone.utc)
+    snap = db.get(KioskSnapshot, kiosk.id)
+    if snap is None:
+        snap = KioskSnapshot(kiosk_id=kiosk.id)
+        db.add(snap)
+    snap.data = {"printers": printers, "compartments": compartments}
+    snap.updated_at = kiosk.last_seen_at
     if kiosk.status is not KioskStatus.MAINTENANCE:
         kiosk.status = KioskStatus.ONLINE
     by_id = {p.id: p for p in kiosk.printers}

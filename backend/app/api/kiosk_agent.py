@@ -8,6 +8,8 @@ from ..db import get_db
 from ..models import Compartment, Job, Kiosk
 from ..schemas import (
     ActiveCode,
+    CommandDoneIn,
+    CommandOut,
     HeartbeatIn,
     KioskCompartmentCfg,
     KioskConfigOut,
@@ -18,6 +20,7 @@ from ..schemas import (
     PickupIn,
 )
 from ..security import decrypt_str
+from ..services import admin as admin_svc
 from ..services import jobs as job_svc
 from ..services import kiosks as kiosk_svc
 from .deps import current_kiosk
@@ -119,3 +122,15 @@ def codes(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)):
 @router.post("/pickup", response_model=KioskJobOut)
 def pickup(body: PickupIn, kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)):
     return kiosk_job_out(job_svc.report_pickup(db, kiosk, body.job_id, body.method))
+
+
+@router.get("/commands", response_model=list[CommandOut])
+def commands(kiosk: Kiosk = Depends(current_kiosk), db: Session = Depends(get_db)):
+    """Operator commands waiting for this kiosk (polled every few seconds)."""
+    return admin_svc.take_commands(db, kiosk)
+
+
+@router.post("/commands/{command_id}/done", response_model=CommandOut)
+def command_done(command_id: int, body: CommandDoneIn, kiosk: Kiosk = Depends(current_kiosk),
+                 db: Session = Depends(get_db)):
+    return admin_svc.command_done(db, kiosk, command_id, body.ok, body.error)

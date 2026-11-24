@@ -300,3 +300,48 @@ def test_recover_and_late_pickup(client, user, admin, kiosk):
         expire_due_jobs(db, now=datetime.now(timezone.utc) + timedelta(hours=25))
     r = client.post(f"{API}/kiosk/pickup", json={"job_id": job2["id"], "method": "pin"}, headers=kiosk["h"])
     assert r.status_code == 200 and r.json()["status"] == "collected"
+
+
+# ---------------------------------------------------------------- admin panel (M5)
+
+def test_admin_overview_and_snapshot(client, admin, user, kiosk):
+    client.post(f"{API}/kiosk/heartbeat", headers=kiosk["h"], json={
+        "printers": [{"id": kiosk["printer_id"], "status": "error", "message": "job 9: paper jam"}],
+        "compartments": [{"id": 1, "door_closed": True, "paper_present": False}],
+    })
+    ov = client.get(f"{API}/admin/overview", headers=admin).json()
+    k = next(x for x in ov["kiosks"] if x["id"] == kiosk["id"])
+    p = k["printers"][0]
+    assert k["status"] == "online" and p["status"] == "error" and p["message"] == "job 9: paper jam"
+    assert any(t.get("printer_id") == kiosk["printer_id"] for t in ov["tasks"])
+    assert client.get(f"{API}/admin/overview", headers=user).status_code == 403
+    client.post(f"{API}/kiosk/heartbeat", headers=kiosk["h"],
+                json={"printers": [{"id": kiosk["printer_id"], "status": "ok"}]})
+
+
+def test_admin_commands_roundtrip(client, admin, kiosk):
+    comp_id = client.get(f"{API}/admin/kiosks/{kiosk['id']}/compartments", headers=admin).json()[0]["id"]
+    r = client.post(f"{API}/admin/compartments/{comp_id}/unlock", headers=admin)
+    assert r.status_code == 202 and r.json()["status"] == "pending"
+    r2 = client.post(f"{API}/admin/printers/{kiosk['printer_id']}/clear", headers=admin)
+    assert r2.status_code == 202
+
+    got = client.get(f"{API}/kiosk/commands", headers=kiosk["h"]).json()
+    assert [c["type"] for c in got] == ["unlock", "clear_printer"]
+    assert got[0]["payload"]["compartment_id"] == comp_id
+    assert client.get(f"{API}/kiosk/commands", headers=kiosk["h"]).json() == []  # already sent
+
+    done = client.post(f"{API}/kiosk/commands/{got[0]['id']}/done", headers=kiosk["h"], json={"ok": True}).json()
+    assert done["status"] == "done"
+    bad = client.post(f"{API}/kiosk/commands/{got[1]['id']}/done", headers=kiosk["h"],
+                      json={"ok": False, "error": "no such printer"}).json()
+    assert bad["status"] == "failed" and bad["error"] == "no such printer"
+    cmds = client.get(f"{API}/admin/commands", params={"kiosk_id": kiosk["id"]}, headers=admin).json()
+    assert {c["status"] for c in cmds} >= {"done", "failed"}
+    evs = client.get(f"{API}/admin/events", params={"kiosk_id": kiosk["id"]}, headers=admin).json()
+    assert any(e["type"] == "command_done" for e in evs)
+
+
+def test_admin_page_served(client):
+    r = client.get("/admin")
+    assert r.status_code == 200 and "PrintLocker admin" in r.text
