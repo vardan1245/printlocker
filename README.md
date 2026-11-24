@@ -8,8 +8,9 @@ Self-service A4 print kiosk with QR-unlocked pickup compartments.
 | M2 Kiosk agent + hardware simulator | done |
 | M3 Pickup (touchscreen, QR/PIN, offline) | done |
 | M4 Flutter app | done |
-| M5 Admin panel | next |
-| M6 Real print · M7 Hardware design · M8 Firmware · M9 Prototype | later |
+| M5 Admin panel (`/admin` on the API: live overview, open doors, clear printers, jobs, events, setup) | done |
+| M6 Real print | next |
+| M7 Hardware design · M8 Firmware · M9 Prototype | later |
 
 **Live test setup (Render + Vercel, free plans; first visit after idle takes ~1 min):**
 - User app (Flutter web): https://printlocker-app.vercel.app · Android APK: GitHub Actions → "Flutter app" run → Artifacts
@@ -93,8 +94,8 @@ How a job runs:
 `failed` and that printer column is **blocked**: it reports `error` in its heartbeat (so the
 server stops accepting jobs for it) and takes no new jobs until an operator removes leftover paper
 and clears it. This stops one user's pages from landing on top of another user's leftovers.
-On the real kiosk, clearing is done by restarting the agent for now; an admin-panel button
-comes in M5.
+An operator clears it with **Clear printer** in the admin panel (`/admin`); the kiosk picks the
+command up within a few seconds. Restarting the agent also clears it.
 
 ESP32 serial protocol (one JSON object per line) is documented in `kiosk-agent/agent/hardware.py`.
 
