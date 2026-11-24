@@ -7,16 +7,19 @@ Self-service A4 print kiosk with QR-unlocked pickup compartments.
 | M1 Backend core | done |
 | M2 Kiosk agent + hardware simulator | done |
 | M3 Pickup (touchscreen, QR/PIN, offline) | done |
-| M4 Flutter app | next |
-| M5 Admin panel · M6 Real print · M7 Hardware design · M8 Firmware · M9 Prototype | later |
+| M4 Flutter app | done |
+| M5 Admin panel | next |
+| M6 Real print · M6 Real print · M7 Hardware design · M8 Firmware · M9 Prototype | later |
 
-**Live test setup (Render, free plan; first visit after idle takes ~1 min):**
+**Live test setup (Render + Vercel, free plans; first visit after idle takes ~1 min):**
+- User app (Flutter web): https://printlocker-app.vercel.app · Android APK: GitHub Actions → "Flutter app" run → Artifacts
 - Test page (log in, print, see QR + PIN): https://printlocker-api-xpqo.onrender.com
 - Kiosk simulator with touchscreen: https://printlocker-kiosk-sim-xpqo.onrender.com
 
 ```
 printlocker/
 ├── docker-compose.yml      backend + PostgreSQL + one simulated kiosk
+├── app/                    Flutter user app (Android, iOS, web) - see app/README.md
 ├── backend/                FastAPI API (users, kiosks, jobs, kiosk-agent endpoints, live status)
 │   ├── app/domain/         pure business rules (states, sheets, reservation, PDF, codes, storage)
 │   ├── app/services/       use cases on the database
