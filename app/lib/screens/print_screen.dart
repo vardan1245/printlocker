@@ -40,23 +40,23 @@ class _PrintScreenState extends State<PrintScreen> {
   }
 
   Future<void> _pick() async {
-    final res = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf'],
-      withData: true,
-    );
-    final f = res?.files.single;
+    // file_picker 13: pickFile() returns one file (null if cancelled); data is read explicitly.
+    final f = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: const ['pdf']);
     if (f == null) return;
-    if (f.bytes == null) {
+    final List<int> bytes;
+    try {
+      bytes = await f.readAsBytes();
+    } catch (_) {
       setState(() => _error = 'Could not read this file.');
       return;
     }
-    if (f.size > maxBytes) {
+    if (bytes.length > maxBytes) {
       setState(() => _error = 'The file is larger than 50 MB.');
       return;
     }
+    if (!mounted) return;
     setState(() {
-      _pdf = f.bytes;
+      _pdf = bytes;
       _filename = f.name;
       _preview = null;
       _error = null;
