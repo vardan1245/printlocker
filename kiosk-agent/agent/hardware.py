@@ -207,6 +207,11 @@ class SerialHardware(Hardware):
                 self._pending.pop(msg["id"]).set(msg)
             elif msg.get("event") in ("delivered", "delivery_failed") and msg.get("ref") in self._finals:
                 self._finals.pop(msg["ref"]).set(msg)
+            elif msg.get("event") == "boot":
+                log.warning("controller restarted (firmware %s)", msg.get("version"))
+                for ref in list(self._finals):  # anything in flight is lost; fail it now, not after a timeout
+                    self._finals.pop(ref).set({"event": "delivery_failed", "ref": ref,
+                                                "error": "controller restarted during delivery"})
 
     def _call(self, cmd: dict, final: bool = False) -> dict:
         msg_id = next(self._ids)
@@ -244,8 +249,17 @@ class SerialHardware(Hardware):
     def unlock(self, compartment_id: int) -> None:
         self._call({"cmd": "unlock", "lock": self._lock_no[compartment_id]})
 
-    def clear_column(self, printer_id: int) -> None:
-        self._call({"cmd": "clear", "column": self._column[printer_id]})
+    def clear_column(self, printer_id: int, park_timeout: float = 60.0) -> None:
+        """Reset the column's error; returns once the controller has parked the lift and pusher."""
+        col = self._column[printer_id]
+        self._call({"cmd": "clear", "column": col})
+        end = time.monotonic() + park_timeout
+        while time.monotonic() < end:
+            cols = self._call({"cmd": "status"}).get("columns", [])
+            if not any(c.get("busy") for c in cols if c.get("no", col) == col):
+                return
+            time.sleep(0.2)
+        raise HardwareError("controller did not park the mechanism after clear")
 
     def sensors(self) -> list[dict]:
         reply = self._call({"cmd": "sensors"})
