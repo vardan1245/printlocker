@@ -1,0 +1,18 @@
+part,file,material,thickness_mm,qty,flat_w_mm,flat_h_mm,holes,cutouts,bends,note
+Side skin,dxf/side-skin.dxf,"Steel DC01, powder-coated",1.5,2,860,1700,34,0,0,Left and right identical; flat
+Top skin,dxf/top-skin.dxf,"Steel DC01, powder-coated",1.5,1,557.0,860,14,0,0,Flat
+Back skin (service panel),dxf/back-skin-service-panel.dxf,"Steel DC01, powder-coated",1.5,1,557.0,1698.5,34,3,0,"Removable; cut-outs for 120 mm fan, 80 mm fan and IEC inlet. Add a grille over the fan holes"
+Kick plate,dxf/kick-plate.dxf,"Steel DC01, powder-coated",1.5,1,497.0,50,0,0,0,Flat; screwed to the base ring
+Bottom panel,dxf/bottom-panel.dxf,Steel DX51D galvanised,1.5,1,497.0,798.5,0,0,0,Flat; sits on the base ring
+"Shelf, full width (bay top, head floor)",dxf/shelf-full-width-bay-top-head-floor.dxf,Steel DX51D galvanised,2,2,533.2,484.1,8,0,3,Front lip and side flanges bent down; blind-rivet the flanges to the side skins
+"Shelf, compartment",dxf/shelf-compartment.dxf,Steel DX51D galvanised,2,7,490.7,484.1,8,0,3,"Left flange to the side skin, right flange to the cable-duct partition"
+Cable duct partition,dxf/cable-duct-partition.dxf,Steel DX51D galvanised,2,1,470,700,16,0,0,Flat; rivet holes for the compartment shelf flanges
+Electronics plate,dxf/electronics-plate.dxf,Steel DX51D galvanised,2,1,497.0,482.5,6,0,0,Flat; components mounted with M3 standoffs drilled on assembly
+Compartment door,dxf/compartment-door.dxf,"Steel DC01, powder-coated",1.5,8,522.1,115.1,0,1,4,"Flanges folded back 90°. Finger groove; piano hinge on the left, strike riveted at the right"
+Printer bay door,dxf/printer-bay-door.dxf,"Steel DC01, powder-coated",1.5,1,522.1,442.1,1,0,4,Cam-lock hole Ø19; piano hinge on the left
+"Head panel (screen, scanner)",dxf/head-panel-screen-scanner.dxf,"Steel DC01, powder-coated",1.5,1,522.1,507.6,0,2,4,"Screen opening 194 × 110, scanner window 70 × 45; piano hinge on the left"
+Printer shelf (drawer),dxf/printer-shelf-drawer.dxf,Steel DX51D galvanised,2,1,512.2,440,0,0,2,Side flanges bent UP 30 mm; drill to the drawer slides on assembly
+Lift platform,dxf/lift-platform.dxf,Aluminium 6082,6,1,230,324,0,0,0,Machined plate; slot for the pusher belt on assembly
+Motor bracket plate,dxf/motor-bracket-plate.dxf,Aluminium 6082,6,1,440,52,10,0,0,"NEMA17 pattern 31 × 31, centre bore Ø22 for the coupler"
+Rear flap,dxf/rear-flap.dxf,Polycarbonate,3,8,240,62,0,0,0,"One-way flap, hinged at its top edge"
+Platform guide,dxf/platform-guide.dxf,Polycarbonate,4,2,324,60,0,0,0,

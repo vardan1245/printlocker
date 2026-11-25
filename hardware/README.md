@@ -11,6 +11,11 @@ Autodesk Fusion, go to Utilities › Scripts and Add-ins › +, pick the file an
 the `P = dict(...)` block at the top: compartments, pitch, where the lift is shown, and `COLUMNS` if a
 bigger kiosk with more printers is ever needed.
 
+## Fabrication
+
+DXF flat patterns, a PDF drawing set, the profile cut list and the bench-rig shopping list are in
+[`fabrication/`](fabrication/README.md), generated from the model's parameters.
+
 ## Validation
 
 The full delivery cycle has been simulated in Fusion with a collision check on every frame, and the motors,
@@ -61,7 +66,7 @@ Prices are rough single-unit estimates in USD, not quotes.
 | Item | Qty | Approx. USD |
 |---|---|---|
 | Kyocera ECOSYS PA4500x + PT-320 face-up rear tray | 1 | 650–750 |
-| 30×30 aluminium extrusion, cut (≈ 13 m) + corner brackets, T-nuts | 1 set | 120 |
+| 30×30 aluminium extrusion, cut (≈ 19 m, see `fabrication/cut_list.csv`) + corner brackets, T-nuts | 1 set | 170 |
 | 1.5 mm steel skins + 2 mm shelves + 9 folded doors, laser-cut and powder-coated | 1 set | 300–450 |
 | Drawer slides 450 mm heavy duty (printer shelf) + 4 levelling feet | 1 pair + 4 | 40 |
 | 2040 extrusion 1.26 m + MGN12 rail 1.2 m + block (lift guides) | 2 | 60 |
@@ -77,7 +82,7 @@ Prices are rough single-unit estimates in USD, not quotes.
 | USB 2D QR scanner module | 1 | 35 |
 | Small gigabit switch, speaker + USB audio, WS2812 LEDs, fans 120/80 mm, IEC inlet with fuse and switch, power strip, wiring, DIN rail | 1 set | 130 |
 | Polycarbonate (platform guides, rear flaps) | 1 set | 20 |
-| **Total** | | **≈ 1,850–2,150 incl. printer (≈ 1,200–1,400 without)** |
+| **Total** | | **≈ 1,900–2,200 incl. printer (≈ 1,250–1,450 without)** |
 
 ## Wiring
 
