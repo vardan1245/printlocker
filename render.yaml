@@ -1,14 +1,6 @@
 # Render Blueprint: backend API + PostgreSQL + one simulated kiosk (demo/test setup).
 # Free plan: services sleep after ~15 min without visits; the first visit wakes them (~1 min).
-# Database: Neon Free (project "printlocker", aws-us-west-2) — set PL_DATABASE_URL in the dashboard.
-# Render's free Postgres below expires 30 days after creation; it is no longer used by the API
-# and is kept only as a fallback until it is deleted.
-
-databases:
-  - name: printlocker-db
-    plan: free
-    databaseName: printlocker
-    user: printlocker
+# Database: Neon Free (project "printlocker", aws-us-west-2); PL_DATABASE_URL is set in the dashboard.
 
 services:
   - type: web

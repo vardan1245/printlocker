@@ -56,6 +56,50 @@ def rearm(key: str) -> None:
 
 
 # ------------------------------------------------------------------ channels
+_found_chat: str | None = None
+
+
+def telegram_chat_id() -> str:
+    """PL_TELEGRAM_CHAT_ID, or the chat found by discover_telegram_chat() since start-up."""
+    return get_settings().telegram_chat_id or _found_chat or ""
+
+
+def discovery_pending() -> bool:
+    s = get_settings()
+    return bool(s.telegram_bot_token) and not telegram_chat_id()
+
+
+def discover_telegram_chat() -> str | None:
+    """With a bot token but no chat id: take the latest chat that wrote to the bot (or added it to a
+    group), so setup is "send /start to the bot". Logs the id so it can be pinned in
+    PL_TELEGRAM_CHAT_ID, and says hello in that chat. Telegram keeps updates for 24 h."""
+    global _found_chat
+    s = get_settings()
+    if not s.telegram_bot_token or s.telegram_chat_id:
+        return None
+    try:
+        with urllib.request.urlopen(f"https://api.telegram.org/bot{s.telegram_bot_token}/getUpdates",
+                                    timeout=10) as r:
+            updates = json.loads(r.read()).get("result", [])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("telegram getUpdates failed: %s", exc)
+        return None
+    chats = [(u.get("message") or u.get("my_chat_member") or u.get("channel_post") or {}).get("chat")
+             for u in updates]
+    chats = [c for c in chats if c]
+    if not chats:
+        log.warning("telegram: no chat yet - send /start to the bot (or add it to the operators' group)")
+        return None
+    chat = chats[-1]
+    _found_chat = str(chat["id"])
+    log.warning("telegram: using chat %s (%s); set PL_TELEGRAM_CHAT_ID=%s to pin it",
+                _found_chat, chat.get("title") or chat.get("username") or chat.get("first_name"), _found_chat)
+    _deliver("telegram", None, "PrintLocker",
+             "Operator alerts are connected to this chat: printer errors, paper and toner, "
+             "kiosks offline, failed and expired jobs.")
+    return _found_chat
+
+
 def _post_json(url: str, body: dict, headers: dict | None = None) -> None:
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json", **(headers or {})})
@@ -73,9 +117,9 @@ def _deliver(kind: str, to: str | None, subject: str, text: str) -> None:
             _post_json("https://api.resend.com/emails",
                        {"from": s.email_from, "to": [to], "subject": subject, "text": text},
                        {"Authorization": f"Bearer {s.resend_api_key}"})
-        elif kind == "telegram" and s.telegram_bot_token and s.telegram_chat_id:
+        elif kind == "telegram" and s.telegram_bot_token and telegram_chat_id():
             _post_json(f"https://api.telegram.org/bot{s.telegram_bot_token}/sendMessage",
-                       {"chat_id": s.telegram_chat_id, "text": f"{subject}\n{text}"})
+                       {"chat_id": telegram_chat_id(), "text": f"{subject}\n{text}"})
         else:
             log.info("[%s not configured] %s -> %s: %s", kind, to or "-", subject, text.replace("\n", " | "))
             return

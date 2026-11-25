@@ -49,6 +49,8 @@ async def _expiry_loop() -> None:
                 log.info("expired %d job(s)", n)
             alerts.remind_due()
             alerts.check_offline()
+            if alerts.discovery_pending():
+                await asyncio.to_thread(alerts.discover_telegram_chat)
         except Exception:  # keep the loop alive
             log.exception("expiry check failed")
 
