@@ -11,7 +11,8 @@ Self-service A4 print kiosk with QR-unlocked pickup compartments.
 | M5 Admin panel (`/admin` on the API: live overview, open doors, clear printers, jobs, events, setup) | done |
 | M6 Real print | waiting for the printer |
 | M7 Hardware design ([`hardware/`](hardware/README.md): 1 printer + 8 compartments, Fusion model script, BOM, wiring) | draft done |
-| M8 Firmware · M9 Prototype | later |
+| M8 Controller firmware ([`firmware/`](firmware/README.md): ESP32 build in CI, passes the controller acceptance tests on the simulated board) | done, waiting for the bench rig |
+| M9 Prototype (bench bring-up guide in [`firmware/README.md`](firmware/README.md)) | next |
 
 **Live test setup (Render + Vercel, free plans; first visit after idle takes ~1 min):**
 - User app (Flutter web): https://printlocker-app.vercel.app · Android APK: GitHub Actions → "Flutter app" run → Artifacts

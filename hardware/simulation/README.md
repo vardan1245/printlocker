@@ -97,5 +97,6 @@ exactly as it will on the real kiosk.
 
 3. ~~Software twin~~ done (above).
 4. Paper bench test with the real printer and a plywood platform mock-up.
-5. One-compartment prototype (lift, pusher, one door).
+5. One-compartment prototype (lift, pusher, one door). The firmware is ready and passes the controller
+   acceptance tests; the bench procedure is in [`firmware/README.md`](../../firmware/README.md).
 6. Full metal kiosk.

@@ -43,7 +43,7 @@ volatile uint32_t sheetCount = 0;
 volatile uint32_t lastEdgeMs = 0;
 void IRAM_ATTR onSheet() {
   uint32_t now = millis();
-  if (now - lastEdgeMs > 30) sheetCount++;  // debounce
+  if (now - lastEdgeMs > 30) sheetCount = sheetCount + 1;  // debounce
   lastEdgeMs = now;
 }
 
