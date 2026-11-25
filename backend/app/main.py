@@ -16,6 +16,7 @@ from .models import Role, User
 from .realtime import hub
 from .security import hash_password
 from .services.errors import ServiceError
+from .services import alerts
 from .services.jobs import expire_due_jobs
 
 log = logging.getLogger("printlocker")
@@ -46,6 +47,8 @@ async def _expiry_loop() -> None:
                 n = expire_due_jobs(db)
             if n:
                 log.info("expired %d job(s)", n)
+            alerts.remind_due()
+            alerts.check_offline()
         except Exception:  # keep the loop alive
             log.exception("expiry check failed")
 

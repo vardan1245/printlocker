@@ -145,6 +145,19 @@ def heartbeat(db: Session, kiosk: Kiosk, printers: list[dict], compartments: lis
         for key in ("paper_ok", "toner_ok"):
             if key in rep:
                 setattr(p, key, bool(rep[key]))
+    try:
+        from . import alerts
+
+        alerts.kiosk_online(kiosk.id)
+        for rep in printers:
+            p = by_id.get(rep.get("id"))
+            if p is not None:
+                alerts.printer_report(kiosk.name, p.id, p.name, p.status.value, p.paper_ok, p.toner_ok,
+                                      rep.get("message"))
+    except Exception:  # alerts must never break a heartbeat
+        import logging
+
+        logging.getLogger("printlocker.kiosks").exception("operator alerts failed")
     # Sensor mismatch (paper seen in a compartment the server thinks is free) -> fault.
     comps = {c.id: c for c in db.scalars(select(Compartment).where(Compartment.kiosk_id == kiosk.id))}
     for rep in compartments:

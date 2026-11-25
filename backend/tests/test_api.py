@@ -358,3 +358,80 @@ def test_admin_commands_roundtrip(client, admin, kiosk):
 def test_admin_page_served(client):
     r = client.get("/admin")
     assert r.status_code == 200 and "PrintLocker admin" in r.text
+
+
+# ---------------------------------------------------------------- notifications and operator alerts
+
+@pytest.fixture
+def outbox():
+    from app.services import alerts
+
+    sent = []
+    alerts.transport = lambda kind, to, subject, text: sent.append((kind, to, subject, text))
+    alerts._RUN_INLINE = True
+    yield sent
+    alerts.transport = None
+    alerts._RUN_INLINE = False
+
+
+def test_user_is_emailed_once_when_the_print_is_ready(client, user, admin, printer_ids, outbox):
+    job = upload(client, user, printer_ids[0]).json()
+    advance(client, admin, job["id"], "printing", "delivering", "ready")
+    mails = [m for m in outbox if m[0] == "email"]
+    assert len(mails) == 1 and mails[0][1] == "u1@example.com" and mails[0][2].startswith("Your print is ready")
+    assert "compartment #" in mails[0][3] and "K1 (Lobby)" in mails[0][3]
+
+    from app.services import alerts
+
+    alerts.job_changed({"job_id": job["id"], "status": "ready", "compartments": [1]})  # same event again
+    assert len([m for m in outbox if m[0] == "email"]) == 1
+
+    assert alerts.remind_due(now=datetime.now(timezone.utc) + timedelta(hours=23)) >= 1
+    assert any(m[2].startswith("Reminder: collect your print") for m in outbox)
+    assert alerts.remind_due(now=datetime.now(timezone.utc) + timedelta(hours=23)) == 0  # once only
+    client.post(f"{API}/admin/jobs/{job['id']}/status", json={"status": "collected"}, headers=admin)
+
+
+def test_failed_and_expired_jobs_notify_user_and_operators(client, user, admin, printer_ids, outbox):
+    job = upload(client, user, printer_ids[1]).json()
+    advance(client, admin, job["id"], "printing", "failed")
+    assert any(m[0] == "email" and m[2].startswith("Print failed") for m in outbox)
+    assert any(m[0] == "telegram" and "failed" in m[2] for m in outbox)
+
+    job = upload(client, user, printer_ids[1]).json()
+    advance(client, admin, job["id"], "printing", "delivering", "ready")
+    with SessionLocal() as db:
+        expire_due_jobs(db, now=datetime.now(timezone.utc) + timedelta(hours=25))
+    assert any(m[0] == "email" and m[2].startswith("Print not collected") for m in outbox)
+    assert any(m[0] == "telegram" and m[2].startswith("Empty compartment") for m in outbox)
+
+
+def test_printer_alerts_fire_once_and_rearm(client, kiosk, outbox):
+    def beat(**rep):
+        client.post(f"{API}/kiosk/heartbeat", headers=kiosk["h"],
+                    json={"printers": [{"id": kiosk["printer_id"], "status": "ok", **rep}]})
+
+    def alerts_about(word):
+        return [m for m in outbox if m[0] == "telegram" and word in m[2]]
+
+    beat(status="error", message="paper jam")
+    beat(status="error", message="paper jam")
+    assert len(alerts_about("Printer P")) == 1 and "paper jam" in alerts_about("Printer P")[0][3]
+    beat()  # fixed
+    beat(status="error")
+    assert len(alerts_about("Printer P")) == 2
+    beat(paper_ok=False)
+    beat(paper_ok=False)
+    assert len(alerts_about("Out of paper")) == 1
+    beat()
+
+
+def test_offline_kiosk_alert(client, kiosk, outbox):
+    from app.services import alerts
+
+    client.post(f"{API}/kiosk/heartbeat", headers=kiosk["h"], json={"printers": []})
+    assert alerts.check_offline() == 0
+    later = datetime.now(timezone.utc) + timedelta(minutes=30)
+    assert alerts.check_offline(now=later) >= 1
+    assert alerts.check_offline(now=later) == 0
+    assert any(m[2] == "Kiosk offline: K2" for m in outbox)

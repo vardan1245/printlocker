@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -27,7 +28,10 @@ from ..domain.storage import DbFileStore, EncryptedFileStore
 from ..models import Compartment, Event, Job, JobCompartment, Kiosk, Printer, PrinterStatus, User
 from ..realtime import hub
 from ..security import decrypt_str, encrypt_str
+from . import alerts
 from .errors import BadRequest, Conflict, NotFound
+
+log = logging.getLogger("printlocker.jobs")
 
 _STAMP = {
     JobStatus.QUEUED: "queued_at",
@@ -46,15 +50,20 @@ def _now() -> datetime:
 
 
 def notify(job: Job) -> None:
-    """Push the job's new status to the owner's open app sessions."""
-    hub.publish_threadsafe(job.user_id, {
+    """Push the job's new status to the owner's open app sessions, and email them when it matters."""
+    info = {
         "type": "job",
         "job_id": job.id,
         "status": job.status.value,
         "compartments": [p.compartment.slot_no for p in job.parts],
         "error": job.error,
         "expires_at": job.expires_at.isoformat() if job.expires_at else None,
-    })
+    }
+    hub.publish_threadsafe(job.user_id, info)
+    try:
+        alerts.job_changed(info)
+    except Exception:  # a notification problem must never fail the status change
+        log.exception("job %s: notification failed", job.id)
 
 
 def get_store() -> EncryptedFileStore | DbFileStore:

@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     # No default: without a password no admin account is created (never a guessable default).
     admin_password: str = ""
 
+    # Notifications (services/alerts.py); each channel is off until its settings are filled in.
+    resend_api_key: str = ""
+    email_from: str = "PrintLocker <onboarding@resend.dev>"
+    operator_emails: str = ""           # comma-separated
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    reminder_minutes: int = 120         # remind users this long before their print expires
+    timezone: str = "Asia/Yerevan"      # times shown in messages
+    app_url: str = ""                   # link at the end of user emails
+
     cors_origins: str = "*"
     simulator_url: str = ""  # link shown on the test page
 

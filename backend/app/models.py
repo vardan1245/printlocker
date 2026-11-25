@@ -202,3 +202,10 @@ class StoredFile(Base):
     data: Mapped[bytes] = mapped_column(LargeBinary)
     size: Mapped[int] = mapped_column(Integer)  # plain size in bytes
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class AlertSent(Base):
+    """Notifications already sent (services/alerts.py), so each goes out once until re-armed."""
+    __tablename__ = "alerts_sent"
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
