@@ -392,13 +392,18 @@ def test_user_is_emailed_once_when_the_print_is_ready(client, user, admin, print
     client.post(f"{API}/admin/jobs/{job['id']}/status", json={"status": "collected"}, headers=admin)
 
 
-def test_failed_and_expired_jobs_notify_user_and_operators(client, user, admin, printer_ids, outbox):
-    job = upload(client, user, printer_ids[1]).json()
+def test_failed_and_expired_jobs_notify_user_and_operators(client, user, admin, outbox):
+    r = client.post(f"{API}/admin/kiosks", json={"name": "K3", "location": "Hall"}, headers=admin)
+    kid = r.json()["kiosk"]["id"]
+    r = client.post(f"{API}/admin/kiosks/{kid}/printers",
+                    json={"name": "C", "cups_queue": "c", "compartments": 3}, headers=admin)
+    pid = r.json()["printers"][0]["id"]
+    job = upload(client, user, pid).json()
     advance(client, admin, job["id"], "printing", "failed")
     assert any(m[0] == "email" and m[2].startswith("Print failed") for m in outbox)
     assert any(m[0] == "telegram" and "failed" in m[2] for m in outbox)
 
-    job = upload(client, user, printer_ids[1]).json()
+    job = upload(client, user, pid).json()
     advance(client, admin, job["id"], "printing", "delivering", "ready")
     with SessionLocal() as db:
         expire_due_jobs(db, now=datetime.now(timezone.utc) + timedelta(hours=25))
