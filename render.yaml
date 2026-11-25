@@ -1,6 +1,8 @@
 # Render Blueprint: backend API + PostgreSQL + one simulated kiosk (demo/test setup).
 # Free plan: services sleep after ~15 min without visits; the first visit wakes them (~1 min).
-# Uploaded PDFs live on the container's disk and are lost on redeploy (fine for testing).
+# Database: Neon Free (project "printlocker", aws-us-west-2) — set PL_DATABASE_URL in the dashboard.
+# Render's free Postgres below expires 30 days after creation; it is no longer used by the API
+# and is kept only as a fallback until it is deleted.
 
 databases:
   - name: printlocker-db
@@ -19,9 +21,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: PL_DATABASE_URL
-        fromDatabase:
-          name: printlocker-db
-          property: connectionString
+        sync: false # Neon connection string (postgresql://...?sslmode=require)
       - key: PL_JWT_SECRET
         generateValue: true
       - key: PL_FILE_KEY
