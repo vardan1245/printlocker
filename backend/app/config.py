@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # Fernet key (base64, 32 bytes). Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     file_key: str = ""
+    storage_backend: str = "db"  # db (rows in the database; survives redeploys) | disk (storage_dir)
     storage_dir: str = "./data/pdfs"
 
     max_pdf_mb: int = 50

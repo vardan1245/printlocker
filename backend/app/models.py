@@ -10,6 +10,7 @@ from sqlalchemy import (
     Enum as SAEnum,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
 )
@@ -192,3 +193,12 @@ class KioskSnapshot(Base):
     kiosk_id: Mapped[int] = mapped_column(ForeignKey("kiosks.id"), primary_key=True)
     data: Mapped[dict] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class StoredFile(Base):
+    """Encrypted uploaded PDF (DbFileStore). Deleted when its job reaches a final state."""
+    __tablename__ = "stored_files"
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    size: Mapped[int] = mapped_column(Integer)  # plain size in bytes
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

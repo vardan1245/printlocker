@@ -212,6 +212,32 @@ def test_new_pin_avoids_taken():
 
 # ---------- storage ----------
 
+def test_db_store():
+    sa = pytest.importorskip("sqlalchemy")
+    from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+    from app.domain.storage import DbFileStore
+
+    class B(DeclarativeBase):
+        pass
+
+    class F(B):
+        __tablename__ = "f"
+        name: Mapped[str] = mapped_column(sa.String(64), primary_key=True)
+        data: Mapped[bytes] = mapped_column(sa.LargeBinary)
+        size: Mapped[int] = mapped_column(sa.Integer)
+
+    eng = sa.create_engine("sqlite://")
+    B.metadata.create_all(eng)
+    store = DbFileStore(sessionmaker(bind=eng), EncryptedFileStore.new_key(), F)
+    name, sha = store.save(b"%PDF-1.7 data")
+    assert store.exists(name) and store.load(name) == b"%PDF-1.7 data" and len(sha) == 64
+    store.delete(name)
+    assert not store.exists(name)
+    with pytest.raises(FileNotFoundError):
+        store.load(name)
+
+
 def test_encrypted_store(tmp_path):
     store = EncryptedFileStore(tmp_path, EncryptedFileStore.new_key())
     name, sha = store.save(b"%PDF-1.7 data")

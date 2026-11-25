@@ -137,6 +137,19 @@ def test_illegal_transition_is_409(client, user, admin, printer_ids):
     assert client.delete(f"{API}/jobs/{job['id']}", headers=user).json()["status"] == "cancelled"
 
 
+def test_pdf_lives_in_the_database_until_the_job_ends(client, user, printer_ids):
+    from app.models import StoredFile
+
+    job = upload(client, user, printer_ids[0]).json()
+    with SessionLocal() as db:
+        path = db.get(Job, job["id"]).file_path
+        row = db.get(StoredFile, path)
+        assert row is not None and b"%PDF" not in row.data  # stored encrypted
+    client.delete(f"{API}/jobs/{job['id']}", headers=user)
+    with SessionLocal() as db:
+        assert db.get(StoredFile, path) is None and db.get(Job, job["id"]).file_path is None
+
+
 def test_split_job_and_full_column(client, user, admin, printer_ids):
     pid = printer_ids[1]
     r = upload(client, user, pid, pages=700)  # 700 sheets -> 2 compartments

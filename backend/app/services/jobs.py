@@ -23,7 +23,7 @@ from ..domain.states import (
     JobStatus,
     compartment_state_after,
 )
-from ..domain.storage import EncryptedFileStore
+from ..domain.storage import DbFileStore, EncryptedFileStore
 from ..models import Compartment, Event, Job, JobCompartment, Kiosk, Printer, PrinterStatus, User
 from ..realtime import hub
 from ..security import decrypt_str, encrypt_str
@@ -57,9 +57,14 @@ def notify(job: Job) -> None:
     })
 
 
-def get_store() -> EncryptedFileStore:
+def get_store() -> EncryptedFileStore | DbFileStore:
     s = get_settings()
-    return EncryptedFileStore(s.storage_dir, fernet_key(s.file_key))
+    if s.storage_backend == "disk":
+        return EncryptedFileStore(s.storage_dir, fernet_key(s.file_key))
+    from ..db import SessionLocal
+    from ..models import StoredFile
+
+    return DbFileStore(SessionLocal, fernet_key(s.file_key), StoredFile)
 
 
 @dataclass

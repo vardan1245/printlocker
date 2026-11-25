@@ -32,8 +32,8 @@ services:
         value: admin@printlocker.local
       - key: PL_ADMIN_PASSWORD
         sync: false
-      - key: PL_STORAGE_DIR
-        value: /tmp/pdfs
+      - key: PL_STORAGE_BACKEND
+        value: db # PDFs as encrypted rows: the free web service's disk is wiped on every restart
 
   - type: web
     name: printlocker-kiosk-sim
