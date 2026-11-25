@@ -15,6 +15,9 @@ Layout of one column, bottom to top:
   498-1236  eight compartments (90 mm pitch, 72 mm opening, takes 500 sheets), doors with solenoid locks
   1236-1750 head: touch screen (centre 1400) + QR scanner (1290), electronics plate behind
   rear shaft (y 500-858): paper lift on two lead screws; a pusher shoves the stack into a compartment
+
+Moving parts are separate top-level components named "MOVE ..." and built at their home position
+(lift at the printer, doors closed). simulate_cycle.py moves them through a full delivery cycle.
 """
 import adsk.core
 import adsk.fusion
@@ -31,7 +34,6 @@ P = dict(
     SHAFT_Y=500,       # compartments end / lift shaft starts
     DUCT_X=486,        # cable duct partition; locks live in the duct (488..528)
     COLUMNS=1,         # 1 column = 1 printer; more columns bolt on the side
-    LIFT_AT=3,         # show the lift level with compartment index (0..5), -1 = at the printer
     RECEIVE_TOP=346,   # platform top when catching paper from the printer
 )
 
@@ -150,71 +152,70 @@ def door_span():
     return x0, P['W'] - 2 * x0
 
 
-def printer_bay(c):
+def printer_bay(c, root):
     x0, w = door_span()
-    box(c, 'Bay door (folded steel, key lock)', x0, 0, P['BASE'] + 2, w, 15, P['BAY_TOP'] - P['BASE'] - 3, DOOR)
-    box(c, 'Bay door cam lock', x0 + w - 40, -3, 410, 18, 3, 18, 'Chrome')
+    door = sub(root, 'MOVE Bay door')
+    box(door, 'Bay door (folded steel, key lock)', x0, 0, P['BASE'] + 2, w, 15, P['BAY_TOP'] - P['BASE'] - 3, DOOR)
+    box(door, 'Bay door cam lock', x0 + w - 40, -3, 410, 18, 3, 18, 'Chrome')
     box(c, 'Drawer slide L', 32, 40, 104, 13, 440, 30, 'Steel - Satin')
     box(c, 'Drawer slide R', P['W'] - 45, 40, 104, 13, 440, 30, 'Steel - Satin')
-    box(c, 'Printer shelf (pull-out, 2 mm steel)', 46, 40, 110, P['W'] - 92, 440, 12, SHELF)
+    drawer = sub(root, 'MOVE Printer drawer')
+    # 52..508: keeps 4.5 mm clear of the opened bay door's hinge side (found by simulate_cycle.py)
+    box(drawer, 'Printer shelf (pull-out, 2 mm steel)', 52, 40, 110, P['W'] - 104, 440, 12, SHELF)
+    printer(drawer)
     box(c, 'Power strip (printer + PSU)', 60, 480, 82, 280, 45, 40, 'Plastic - Matte (Black)')
     box(c, 'Bay fan 120 mm', 220, P['D'] - P['SKIN'] - 25, 160, 120, 25, 120, 'Plastic - Matte (Black)')
     box(c, 'IEC inlet + fuse + switch', 440, P['D'], 120, 50, 8, 32, 'Plastic - Matte (Black)')
 
 
-def printer(c):
-    z0 = 122
-    box(c, 'Kyocera PA4500x body', 90, 40, z0, 380, 410, 285, 'Plastic - Matte (White)')
-    box(c, 'Paper cassette front', 100, 38, z0 + 10, 360, 2, 75, 'Plastic - Matte (Gray)')
-    box(c, 'Operation panel', 380, 44, z0 + 285, 80, 40, 8, 'Plastic - Glossy (Black)')
-    box(c, 'Top output tray (unused)', 140, 150, z0 + 285, 280, 200, 1, 'Plastic - Matte (Gray)')
-    box(c, 'PT-320 face-up rear unit', 165, 450, z0 + 134, 230, 48, 130, 'Plastic - Matte (Gray)')
-    box(c, 'PT-320 exit slot', 175, 498, z0 + 244, 210, 1, 6, 'Plastic - Glossy (Black)')
-
-
-def lockers(c):
+def lockers(c, root):
     x0, w = door_span()
     for i in range(P['N']):
         zf = P['BAY_TOP'] + 18 + i * P['PITCH']       # compartment floor (shelf top)
         zc = zf + P['PITCH'] - 18                     # ceiling (lip of the next shelf)
         mid = (zf + zc) / 2
         n = i + 1
+        d = sub(root, 'MOVE Door %d' % n)
         door = tbox(x0, 0, zf - 17, w, 15, P['PITCH'] - 2)
         cut(door, tbox(230, -1, zf - 10, 100, 5, 8))   # finger pull groove
-        add(c, 'Door %d (folded steel)' % n, door, DOOR)
-        box(c, 'Door %d number plate' % n, x0 + 10, -1, mid - 14, 34, 1, 28, 'Plastic - Matte (Black)')
-        box(c, 'Door %d status LED' % n, x0 + w - 40, -1, mid - 4, 25, 1, 8, 'LED (Green)')
-        box(c, 'Door %d strike' % n, 499, 15, mid - 8, 22, 3, 16, 'Steel - Satin')
+        add(d, 'Door %d (folded steel)' % n, door, DOOR)
+        box(d, 'Door %d number plate' % n, x0 + 10, -1, mid - 14, 34, 1, 28, 'Plastic - Matte (Black)')
+        box(d, 'Door %d status LED' % n, x0 + w - 40, -1, mid - 4, 25, 1, 8, 'LED (Green)')
+        box(d, 'Door %d strike' % n, 499, 15, mid - 8, 22, 3, 16, 'Steel - Satin')
+        box(d, 'Door %d magnet' % n, 40, 15, mid - 5, 10, 2, 10, 'Paint - Metallic (Silver)')
         box(c, 'Lock %d (12 V solenoid)' % n, 496, 18, mid - 20, 28, 54, 41, 'Steel - Galvanized (Small)')
-        box(c, 'Door %d magnet' % n, 40, 15, mid - 5, 10, 2, 10, 'Paint - Metallic (Silver)')
         box(c, 'Door %d reed switch' % n, 40, 31, mid - 5, 10, 10, 10, 'Plastic - Matte (Black)')
         box(c, 'Comp %d paper sensor (IR)' % n, 245, 300, zc - 8, 30, 15, 6, 'FR4')
-        box(c, 'Comp %d rear flap (one-way)' % n, 160, P['SHAFT_Y'] - 3, zf + 2, 240, 3, zc - zf - 10,
+        f = sub(root, 'MOVE Flap %d' % n)
+        box(f, 'Comp %d rear flap (one-way)' % n, 160, P['SHAFT_Y'] - 3, zf + 2, 240, 3, zc - zf - 10,
             'Plastic - Translucent Matte (Gray)')
     zf = P['BAY_TOP'] + 18 + 1 * P['PITCH']
     box(c, 'Paper stack (job in comp 2)', 175, 185, zf, 210, 297, 30, 'Paper (White)')
 
 
-def lift(c):
-    top = P['RECEIVE_TOP'] if P['LIFT_AT'] < 0 else P['BAY_TOP'] + 18 + P['LIFT_AT'] * P['PITCH']
+def lift(c, root):
+    top = P['RECEIVE_TOP']          # movers are built at home; simulate_cycle.py moves them
+    car = sub(root, 'MOVE Lift carriage')
+    pad = sub(root, 'MOVE Pusher paddle')
+    stack = sub(root, 'MOVE Paper stack')
     for side, xe, xr, xb in (('L', 60, 80, 88), ('R', 480, 472, 459)):
         box(c, 'Lift extrusion 2040 %s' % side, xe, 788, P['BASE'] + 2, 20, 40, 1258, FRAME)
         box(c, 'MGN12 rail %s' % side, xr, 800, 110, 8, 12, 1220, 'Steel - Satin')
-        box(c, 'MGN12 block %s' % side, xb, 796, top - 40, 13, 20, 40, 'Steel - Satin')
+        box(car, 'MGN12 block %s' % side, xb, 796, top - 40, 13, 20, 40, 'Steel - Satin')
     for side, x in (('L', 130), ('R', 430)):
         rod(c, 'Lead screw T8 %s' % side, x, 803, 110, 1340, 4, 'Stainless Steel - Polished')
         box(c, 'Lift motor NEMA17 %s' % side, x - 21, 782, 1346, 42, 42, 48, 'Paint - Metallic (Black)')
-        box(c, 'Screw nut %s' % side, x - 11, 792, top - 30, 22, 22, 12, 'Brass - Polished')
+        box(car, 'Screw nut %s' % side, x - 11, 792, top - 30, 22, 22, 12, 'Brass - Polished')
     box(c, 'Motor bracket plate', 60, 778, 1340, 440, 52, 6, FRAME)
-    box(c, 'Lift arm L', 101, 778, top - 30, 64, 48, 24, FRAME)
-    box(c, 'Lift arm R', 395, 778, top - 30, 64, 48, 24, FRAME)
-    box(c, 'Platform', 165, 502, top - 6, 230, 324, 6, FRAME)
-    box(c, 'Platform guide L', 161, 502, top, 4, 324, 60, 'Polycarbonate (Clear)')
-    box(c, 'Platform guide R', 395, 502, top, 4, 324, 60, 'Polycarbonate (Clear)')
-    box(c, 'Pusher paddle', 172, 802, top + 2, 216, 6, 55, 'Plastic - Matte (Red)')
-    box(c, 'Pusher belt GT2', 276, 510, top - 14, 8, 300, 6, 'Rubber - Hard')
-    box(c, 'Pusher motor NEMA17', 290, 690, top - 46, 42, 42, 40, 'Paint - Metallic (Black)')
-    box(c, 'Paper stack on platform', 175, 505, top, 210, 297, 15, 'Paper (White)')
+    box(car, 'Lift arm L', 101, 778, top - 30, 64, 48, 24, FRAME)
+    box(car, 'Lift arm R', 395, 778, top - 30, 64, 48, 24, FRAME)
+    box(car, 'Platform', 165, 502, top - 6, 230, 324, 6, FRAME)
+    box(car, 'Platform guide L', 161, 502, top, 4, 324, 60, 'Polycarbonate (Clear)')
+    box(car, 'Platform guide R', 395, 502, top, 4, 324, 60, 'Polycarbonate (Clear)')
+    box(car, 'Pusher belt GT2', 276, 510, top - 14, 8, 300, 6, 'Rubber - Hard')
+    box(car, 'Pusher motor NEMA17', 290, 690, top - 46, 42, 42, 40, 'Paint - Metallic (Black)')
+    box(pad, 'Pusher paddle', 172, 802, top + 2, 216, 6, 55, 'Plastic - Matte (Red)')
+    box(stack, 'Paper stack on platform', 175, 505, top, 210, 297, 15, 'Paper (White)')
     box(c, 'Drag chain', 495, 700, 120, 30, 30, 1220, 'Plastic - Matte (Black)')
     box(c, 'Limit switch bottom', 60, 768, 120, 20, 20, 12, 'Plastic - Matte (Red)')
     box(c, 'Limit switch top', 60, 768, 1320, 20, 20, 12, 'Plastic - Matte (Red)')
@@ -278,10 +279,9 @@ def run(_context: str):
     col.name = 'Column (1 printer, %d compartments)' % P['N']
     frame(sub(col, 'Frame (30x30 extrusion)'))
     skins(sub(col, 'Skins and shelves (steel)'))
-    printer_bay(sub(col, 'Printer bay'))
-    printer(sub(col, 'Printer Kyocera PA4500x + PT-320'))
-    lockers(sub(col, 'Compartments, doors, locks'))
-    lift(sub(col, 'Paper lift + pusher'))
+    printer_bay(sub(col, 'Printer bay'), root)
+    lockers(sub(col, 'Compartments, locks, sensors'), root)
+    lift(sub(col, 'Paper lift (static guides)'), root)
     controller(sub(col, 'Column electronics'))
 
     head_a(sub(root, 'Head A (screen, scanner, Pi)'))

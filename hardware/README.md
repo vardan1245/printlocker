@@ -11,6 +11,11 @@ Autodesk Fusion, go to Utilities › Scripts and Add-ins › +, pick the file an
 the `P = dict(...)` block at the top: compartments, pitch, where the lift is shown, and `COLUMNS` if a
 bigger kiosk with more printers is ever needed.
 
+## Validation
+
+The full delivery cycle has been simulated in Fusion with a collision check on every frame, and the motors,
+timing and power have been checked by calculation: see [`simulation/`](simulation/README.md).
+
 ## Layout
 
 **One kiosk = one printer + 8 compartments. Size 560 W × 860 D × 1750 H mm.**
