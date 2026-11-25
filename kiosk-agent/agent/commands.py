@@ -5,7 +5,7 @@ import logging
 import threading
 
 from .api import ApiClient, ApiError, OfflineError
-from .hardware import Hardware, HardwareError, SimHardware
+from .hardware import Hardware, HardwareError
 from .printers import PrinterDriver
 
 log = logging.getLogger("agent.commands")
@@ -24,9 +24,8 @@ def run_command(cmd: dict, hw: Hardware, printers: dict[int, PrinterDriver]) -> 
             drv = printers.get(pid)
             if drv is None:
                 return False, f"printer {pid} is not on this kiosk"
+            hw.clear_column(pid)  # controller resets first; if it refuses, the printer stays blocked
             drv.clear_block()
-            if isinstance(hw, SimHardware):
-                hw.clear_column(pid)
             log.warning("operator cleared printer %s; it takes jobs again", pid)
             return True, None
         return False, f"unknown command {t!r}"

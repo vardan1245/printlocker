@@ -52,4 +52,4 @@ services:
       - key: PL_PRINTER_MODE
         value: sim
       - key: PL_HARDWARE_MODE
-        value: sim
+        value: twin # controller twin: real geometry, timings, interlocks

@@ -69,9 +69,9 @@ Runs on the Raspberry Pi. Settings are environment variables:
 | `PL_SERVER_URL` | `http://localhost:8000/api/v1` | backend |
 | `PL_KIOSK_KEY` | — | key shown once when the kiosk was created |
 | `PL_PRINTER_MODE` | `sim` | `sim` or `cups` (real printers; CUPS queue name = printer's `cups_queue`) |
-| `PL_HARDWARE_MODE` | `sim` | `sim` or `serial` (ESP32 controller) |
+| `PL_HARDWARE_MODE` | `twin` | `twin` (controller twin: real timings, interlocks, faults), `sim` (instant stand-in) or `serial` (ESP32 controller) |
 | `PL_SERIAL_PORT` | `/dev/ttyUSB0` | ESP32 port |
-| `PL_SIM_SPEED` | `1.0` | simulator timing; `0` = instant |
+| `PL_SIM_SPEED` | `1.0` | simulator timing: `1` = real machine time (a delivery takes 17–33 s), `0.2` = 5× faster, `0` = instant |
 | `PL_SIM_VIEW_PORT` | `8100` | simulator page; `0` = off |
 | `PL_POLL_SECONDS` / `PL_HEARTBEAT_SECONDS` | `2` / `15` | polling intervals |
 | `PL_CUPS_OPTIONS` | `outputorder=reverse` | extra `lp -o` options, space-separated (add the PPD's face-up/rear output-bin option) |

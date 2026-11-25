@@ -61,6 +61,8 @@ class SimState:
             self.printers[int(a["printer_id"])].fail_next = "paper jam (simulated)"
         elif t == "fail_delivery":
             self.hw.fail_next_delivery = "elevator stalled (simulated)"
+        elif t == "fault" and hasattr(self.hw, "inject_fault"):
+            self.hw.inject_fault(str(a["kind"]))  # twin: lift_stall, pusher_stall, power_cut, stack_missing
         elif t == "toggle_paper":
             p = self.printers[int(a["printer_id"])]
             p.paper_ok = not p.paper_ok

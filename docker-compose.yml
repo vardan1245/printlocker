@@ -41,7 +41,7 @@ services:
       PL_SERVER_URL: http://backend:8000/api/v1
       PL_KIOSK_KEY: *demo_key
       PL_PRINTER_MODE: sim
-      PL_HARDWARE_MODE: sim
+      PL_HARDWARE_MODE: twin
       PL_SIM_SPEED: "1.0"
     ports:
       - "8100:8100"

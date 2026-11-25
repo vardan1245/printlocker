@@ -10,7 +10,7 @@ from pathlib import Path
 from .api import ApiClient, ApiError, OfflineError
 from .commands import command_loop
 from .config import AgentConfig
-from .hardware import Hardware, SerialHardware, SimHardware
+from .hardware import Hardware, SerialHardware, SimHardware, TwinHardware
 from .pickup import CodeCache, Outbox, PickupManager
 from .printers import CupsPrinter, PrinterDriver, SimPrinter
 from .simview import LogBuffer, SimHolder, SimState, serve
@@ -94,14 +94,19 @@ def main() -> None:
              len(conf["printers"]), len(conf["compartments"]))
 
     printer_ids = [p["id"] for p in conf["printers"]]
-    hw: Hardware = SimHardware(cfg.sim_speed) if cfg.hardware_mode == "sim" else SerialHardware(cfg.serial_port)
+    if cfg.hardware_mode == "twin":
+        hw: Hardware = TwinHardware(cfg.sim_speed)
+    elif cfg.hardware_mode == "sim":
+        hw = SimHardware(cfg.sim_speed)
+    else:
+        hw = SerialHardware(cfg.serial_port)
     hw.setup(conf["compartments"], printer_ids)
 
     printers: dict[int, PrinterDriver] = {}
     for p in conf["printers"]:
         if cfg.printer_mode == "sim":
             printers[p["id"]] = SimPrinter(p["id"], p["cups_queue"], cfg.sim_speed,
-                                           on_sheet=hw.add_sheet if isinstance(hw, SimHardware) else None)
+                                           on_sheet=getattr(hw, "add_sheet", None))
         else:
             printers[p["id"]] = CupsPrinter(p["id"], p["cups_queue"], extra_options=list(cfg.cups_options))
 
@@ -120,7 +125,7 @@ def main() -> None:
     outbox = Outbox(data / "outbox.json")
     pickup = PickupManager(cache, hw, outbox)
     status = Status()
-    if isinstance(hw, SimHardware):
+    if hasattr(hw, "snapshot"):
         sims = {pid: d for pid, d in printers.items() if isinstance(d, SimPrinter)}
         names = {p["id"]: p["name"] for p in conf["printers"]}
         holder.sim = SimState(hw, sims, names, logbuf, conf["name"])

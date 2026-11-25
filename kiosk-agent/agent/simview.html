@@ -31,6 +31,10 @@
           display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; transition: top .35s ease; }
   .tray.err { border-color: var(--bad); }
   .tray .pusher { font-size: 10px; color: var(--quiet); }
+  .tray .push { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 3px; background: #ecebe6; border-radius: 2px; }
+  .tray .push > div { height: 100%; background: var(--bad); border-radius: 2px; }
+  .twinline { font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--quiet); margin: -4px 0 10px; }
+  .twinline b { color: var(--ink); }
   .slots { display: flex; flex-direction: column; }
   .slot { height: var(--row); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
   .slot + .slot { margin-top: 0; }
@@ -127,27 +131,16 @@ function render(st) {
       <div class="faults">
         <div class="faults-title">Simulate a problem on ${esc(p.name)}</div>
         <button data-jam="${p.id}">Jam next print</button>
-        <button data-fail="1">Fail next delivery</button>
         <button data-paper="${p.id}">${p.paper_ok ? 'Run out of paper' : 'Refill paper'}</button>
+        ${st.twin ? `
+        <button data-fault="lift_stall">Lift stalls</button>
+        <button data-fault="pusher_stall">Pusher stalls</button>
+        <button data-fault="power_cut">Power cut mid-lift</button>
+        <button data-fault="stack_missing">Paper not detected</button>` : '<button data-fail="1">Fail next delivery</button>'}
       </div>
-      <div class="stack">
-        <div class="shaft" style="height:${(comps.length + 1) * ROW}px">
-          <div class="tray ${col.error ? 'err' : ''}" style="top:${(col.elevator_slot || 0) * ROW + 5}px">
-            <div><b>${col.tray_sheets || 0}</b> sh</div>
-            <div class="pusher">${col.error ? 'error' : col.pusher === 'pushing' ? 'pushing →' : col.busy ? 'moving' : 'tray'}</div>
-          </div>
-        </div>
-        <div class="slots">
-          <div class="slot top"><span>printer output</span></div>
-          ${comps.map(c => `
-            <div class="slot ${!c.door_closed ? 'open' : c.paper_sheets ? 'paper' : ''}">
-              <span><span class="n">#${c.slot_no}</span>
-                <span class="small">${c.paper_sheets ? c.paper_sheets + ' sheets' : 'empty'} · ${c.door_closed ? (c.locked ? 'locked' : 'closed') : 'OPEN'}</span></span>
-              <span>${c.paper_sheets || !c.door_closed ? `<button data-take="${c.id}">take &amp; close</button>` : ''}
-              ${!c.door_closed ? `<button data-close="${c.id}">close only</button>` : ''}</span>
-            </div>`).join('')}
-        </div>
-      </div>
+      ${st.twin ? `<div class="twinline">controller: <b>${esc(col.phase || 'idle')}</b> · lift ${col.lift_mm ?? '–'} mm
+        · pusher ${col.pusher_mm ?? 0} mm${col.hold ? ' · motors holding' : ''}${col.error ? ` · <b style="color:var(--bad)">${esc(col.error)}</b>` : ''}</div>` : ''}
+      ${st.twin ? twinStack(st, col, comps) : simpleStack(col, comps)}
       `;
     root.appendChild(div);
   }
@@ -157,6 +150,60 @@ function render(st) {
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
+function slotRow(c) {
+  return `
+    <div class="slot ${!c.door_closed ? 'open' : c.paper_sheets ? 'paper' : ''}">
+      <span><span class="n">#${c.slot_no}</span>
+        <span class="small">${c.paper_sheets ? c.paper_sheets + ' sheets' : 'empty'} · ${c.door_closed ? (c.locked ? 'locked' : 'closed') : 'OPEN'}</span></span>
+      <span>${c.paper_sheets || !c.door_closed ? `<button data-take="${c.id}">take &amp; close</button>` : ''}
+      ${!c.door_closed ? `<button data-close="${c.id}">close only</button>` : ''}</span>
+    </div>`;
+}
+
+// Old stand-in: printer output on top, tray moves down one slot per step.
+function simpleStack(col, comps) {
+  return `
+    <div class="stack">
+      <div class="shaft" style="height:${(comps.length + 1) * ROW}px">
+        <div class="tray ${col.error ? 'err' : ''}" style="top:${(col.elevator_slot || 0) * ROW + 5}px">
+          <div><b>${col.tray_sheets || 0}</b> sh</div>
+          <div class="pusher">${col.error ? 'error' : col.pusher === 'pushing' ? 'pushing →' : col.busy ? 'moving' : 'tray'}</div>
+        </div>
+      </div>
+      <div class="slots">
+        <div class="slot top"><span>printer output</span></div>
+        ${comps.map(slotRow).join('')}
+      </div>
+    </div>`;
+}
+
+// Twin: the real layout. Printer at the bottom, the lift rises by real millimetres.
+function twinStack(st, col, comps) {
+  const g = st.geometry, n = comps.length;
+  const mm = col.lift_mm ?? g.receive_mm;
+  const fromPrinter = mm <= g.first_floor_mm
+    ? (mm - g.receive_mm) / (g.first_floor_mm - g.receive_mm)
+    : 1 + (mm - g.first_floor_mm) / g.pitch_mm;          // rows above the printer row
+  const top = (n - fromPrinter) * ROW + 5;
+  const label = col.error ? 'error' : col.phase === 'push' ? 'pushing →' : col.phase === 'pusher_home' ? '← return'
+    : col.phase === 'lift_up' ? 'rising ↑' : col.phase === 'lift_down' ? 'down ↓' : col.phase === 'settle' ? 'settling'
+    : col.busy ? col.phase : 'at printer';
+  return `
+    <div class="stack">
+      <div class="shaft" style="height:${(n + 1) * ROW}px">
+        <div class="tray ${col.error ? 'err' : ''}" style="top:${top}px">
+          <div><b>${col.tray_sheets || 0}</b> sh</div>
+          <div class="pusher">${label}</div>
+          <div class="push"><div style="width:${Math.round(100 * (col.push_frac || 0))}%"></div></div>
+        </div>
+      </div>
+      <div class="slots">
+        ${[...comps].reverse().map(slotRow).join('')}
+        <div class="slot top"><span>printer output (PT-320, face up)</span></div>
+      </div>
+    </div>`;
+}
+
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b) return;
@@ -164,6 +211,7 @@ document.addEventListener('click', (e) => {
   if (b.dataset.take) act({ type: 'take_paper', compartment_id: b.dataset.take });
   if (b.dataset.jam) act({ type: 'jam_printer', printer_id: b.dataset.jam });
   if (b.dataset.fail) act({ type: 'fail_delivery' });
+  if (b.dataset.fault) act({ type: 'fault', kind: b.dataset.fault });
   if (b.dataset.clear) act({ type: 'clear_fault', printer_id: b.dataset.clear });
   if (b.dataset.paper) act({ type: 'toggle_paper', printer_id: b.dataset.paper });
 });

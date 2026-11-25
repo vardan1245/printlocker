@@ -1,4 +1,4 @@
-# Motion study and engineering checks (step 1 and 2 of design validation)
+# Design validation: motion study, engineering checks, software twin (steps 1–3)
 
 ![Storyboard](storyboard.png)
 
@@ -56,6 +56,36 @@ the lift is away from home, and add a rubber end stop at the bottom. The lift al
 between jobs, so a power cut can only drop it mid-delivery, with the paper still on the platform. The
 alternative is 2 mm-lead screws, which are self-locking but make deliveries about 4× slower.
 
+## 3. Software twin of the controller
+
+[`kiosk-agent/agent/twin.py`](../../kiosk-agent/agent/twin.py) models what the ESP32 firmware will do
+and how the mechanics respond. It uses the geometry and speeds from steps 1–2, the platform sheet
+counter, the door reed switches, the hold current and the injectable faults. It speaks the controller's
+serial protocol, so the agent's real serial code runs against it. The simulator page now runs the twin
+(`PL_HARDWARE_MODE=twin`), shows the lift moving by real millimetres, and has buttons for each fault.
+
+Behaviour the twin defines, and the firmware must match:
+
+| Situation | Controller behaviour |
+|---|---|
+| Delivery requested | waits 5 s for the last sheet, checks the sheet count, lifts, pushes, checks the compartment sensor, returns. Replies at once, reports the end as an event |
+| Sheet count differs from the job | stops before moving; column blocked until an operator clears it |
+| A door in the column opens during a move | lift and pusher pause; resume when it closes; fail after 60 s |
+| Lift or pusher stalls (StallGuard) | stop, report where, column blocked |
+| Power cut while the lift is up | carriage back-drives to the bottom stop with the paper still on it; operator clears |
+| Compartment sensor sees no paper after the push | fail, column blocked |
+| Unlock or sensor poll during a delivery | answered at once (deliver is asynchronous) |
+
+**Found and fixed by the twin:** the first protocol was strictly request/reply, so a 30-second delivery
+would have blocked the serial line. A person scanning their QR during someone else's delivery would
+have waited up to half a minute for their door. Deliver is now asynchronous: the controller accepts it
+at once and reports `delivered` / `delivery_failed` as an event, and unlocks are answered immediately.
+
+`tests/test_controller_protocol.py` is the acceptance test for the real firmware (M8). It runs against the
+twin by default, and against a board with `PL_CONFORMANCE_PORT=/dev/ttyUSB0`.
+`python -m agent.twin_pty` serves the twin on a pseudo-terminal, so the agent can run in `serial` mode
+exactly as it will on the real kiosk.
+
 ## What this does not prove yet
 
 - How real sheets behave leaving the PT-320: whether they stack flat, curl or stick by static.
@@ -65,7 +95,7 @@ alternative is 2 mm-lead screws, which are self-locking but make deliveries abou
 
 ## Next steps
 
-3. Software twin: give the kiosk simulator these real timings and the exact motor/sensor sequence.
+3. ~~Software twin~~ done (above).
 4. Paper bench test with the real printer and a plywood platform mock-up.
 5. One-compartment prototype (lift, pusher, one door).
 6. Full metal kiosk.
